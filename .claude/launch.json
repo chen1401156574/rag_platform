@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Frontend (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "port": 5181
+    },
+    {
+      "name": "Backend (FastAPI)",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "-f", "backend/docker-compose.yml", "up", "swxy_api"],
+      "port": 8000
+    }
+  ]
+}

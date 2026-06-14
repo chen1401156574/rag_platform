@@ -104,7 +104,7 @@ def check_draft_and_clarify(
 
 重要规则：
 - 宁可多问，不可猜测。任何不确定的参数都视为缺失
-- clarify_questions 最多3个，要具体、方便用户一次性回答（例如"您出差去哪个城市？您的员工级别是普通员工还是LT成员？"）
+- clarify_questions 最多5个，要具体、方便用户一次性回答（例如"您出差去哪个城市？您的员工级别是普通员工还是LT成员？"）
 - 如果用户问题本身就是闲聊或不涉及计算/规则的问题，need_clarify = false
 - 不要返回 markdown 代码块包裹，直接返回 JSON
 """
