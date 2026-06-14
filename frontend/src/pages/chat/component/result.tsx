@@ -1,3 +1,4 @@
+import IconAsk from '@/assets/chat/tip.svg'
 import IconCopy from '@/assets/chat/copy.svg'
 import IconRefresh from '@/assets/chat/refresh.svg'
 import IconShare from '@/assets/chat/share.svg'
@@ -107,6 +108,20 @@ export function Result(props: {
         <div className={styles['chat-message-result__error']}>{item.error}</div>
       ) : null}
 
+      {item.clarifying_questions && !item.loading ? (
+        <div className={styles['chat-message-result__clarify']}>
+          <div className={styles['clarify-header']}>
+            <img src={IconAsk} className={styles['clarify-icon']} />
+            <span>以下问题需要您补充说明，您可以一次性回答所有问题：</span>
+          </div>
+          <ol className={styles['clarify-list']}>
+            {item.clarifying_questions.map((q, i) => (
+              <li key={i} className={styles['clarify-item']}>{q}</li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+
       {item.loading ? null : (
         <>
           <div className={styles['chat-message-result__actions']}>
@@ -159,7 +174,7 @@ export function Result(props: {
             </Dropdown>
           </div>
 
-          {isEnd ? (
+          {isEnd && !item.clarifying_questions?.length ? (
             <div className={styles['chat-message-result__quick-reply']}>
               {item.recommended_questions?.map((item) => (
                 <Button

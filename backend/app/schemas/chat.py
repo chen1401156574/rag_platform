@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 ##################################
 # 创建一个新的对话 Session
@@ -52,3 +52,5 @@ class AddDocsResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    clarifications: Optional[str] = None
+    original_question: Optional[str] = None

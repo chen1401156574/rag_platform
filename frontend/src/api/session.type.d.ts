@@ -19,6 +19,8 @@ declare namespace API {
     documents?: Document[]
     reference?: Reference[]
     recommended_questions?: string[]
+    clarifying_questions?: string[]
+    original_question?: string
   }
 
   interface Document {

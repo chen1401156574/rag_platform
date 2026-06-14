@@ -45,6 +45,8 @@ export function chat(
   params: {
     id: string
     message: string
+    clarifications?: string
+    original_question?: string
   },
   options?: AxiosRequestConfig,
 ) {
@@ -53,7 +55,9 @@ export function chat(
     //后端路由
     '/chat_on_docs',
     {
-      ..._params,
+      message: _params.message,
+      clarifications: _params.clarifications,
+      original_question: _params.original_question,
     },
     {
       headers: {

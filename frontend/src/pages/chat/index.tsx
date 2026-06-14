@@ -226,7 +226,7 @@ export default function Index() {
   })
 
   const sendChat = useCallback(
-    async (target: API.ChatItem, message: string, targetSessionId: string) => {
+    async (target: API.ChatItem, message: string, targetSessionId: string, clarify?: { clarifications: string; original_question: string }) => {
       setCurrentChatItem(target)
       target.loading = true
       try {
@@ -234,6 +234,8 @@ export default function Index() {
         const res = await api.session.chat({
           id: targetSessionId,
           message,
+          clarifications: clarify?.clarifications,
+          original_question: clarify?.original_question,
         })
         sessionActions.updateKey()
 
@@ -311,6 +313,11 @@ export default function Index() {
             setDocuments(documents)
           }
 
+          if (json?.clarifying_questions?.length) {
+            target.clarifying_questions = json.clarifying_questions
+            target.original_question = json.original_question
+          }
+
           if (json?.recommended_questions?.length) {
             target.recommended_questions = json.recommended_questions
           }
@@ -330,6 +337,13 @@ export default function Index() {
 
       const targetSessionId = activeSessionId || (await ensureSession())
 
+      // 检测上一轮是否有待回答的追问
+      const lastItem = chat.list[chat.list.length - 1]
+      const pendingClarify =
+        lastItem?.clarifying_questions?.length && lastItem?.original_question
+          ? { clarifications: message, original_question: lastItem.original_question }
+          : undefined
+
       if (chat.list.length === 0) {
         chat.list.push({
           id: createChatId(),
@@ -347,7 +361,7 @@ export default function Index() {
 
         const target = chat.list[chat.list.length - 1]
 
-        await sendChat(target, message!, targetSessionId)
+        await sendChat(target, message, targetSessionId, pendingClarify)
       } else {
         chat.list.push({
           id: createChatId(),
@@ -366,7 +380,7 @@ export default function Index() {
 
         const target = chat.list[chat.list.length - 1]
 
-        await sendChat(target, message!, targetSessionId)
+        await sendChat(target, message, targetSessionId, pendingClarify)
       }
     },
     [chat, ensureSession, sendChat],

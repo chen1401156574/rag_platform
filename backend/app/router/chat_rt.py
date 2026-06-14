@@ -11,7 +11,8 @@ from service.core.file_parse import execute_insert_process
 from service.core.api.utils.file_utils import get_project_base_directory
 from fastapi_jwt import JwtAuthorizationCredentials
 from service.core.retrieval import retrieve_content
-from service.core.chat import get_chat_completion
+from service.core.chat import get_chat_completion, stream_clarify_response
+from service.ambiguity_service import check_draft_and_clarify, merge_clarifications
 from service.intent_engine import default_intent_router
 from service.auth import access_security
 from service.settings_service import get_retrieval_top_k, load_settings
@@ -56,6 +57,8 @@ def _stream_chat_response(
     trace_name: str,
     entry_method: str,
     deep_thinking: bool = False,
+    clarifications: Optional[str] = None,
+    original_question: Optional[str] = None,
 ):
     tracker = TraceTracker(db)
     tracker.start_run(
@@ -145,9 +148,39 @@ def _stream_chat_response(
             input_data={"question": question, "top_k": top_k},
         )
 
+    # 处理追问澄清：若用户已回答追问，合并后重新检索
+    effective_question = question
+    if clarifications and original_question:
+        effective_question = merge_clarifications(original_question, clarifications)
+        logger.info(f"追问澄清合并完成，原始提问: {original_question}")
+        logger.info(f"补充说明: {clarifications}")
+        # 用合并后的问题重新检索
+        try:
+            logger.info("使用合并后的问题重新检索")
+            references = retrieve_content(
+                user_id,
+                effective_question,
+                top_k=top_k,
+                kb_ids=None,
+            )
+            logger.info(f"重新检索获得 {len(references)} 条参考内容")
+        except Exception as e:
+            logger.warning(f"重新检索失败: {str(e)}")
+
+    # 歧义检测：生成草稿回答并自查不确定性
+    if not clarifications and references:
+        clarifying_questions = check_draft_and_clarify(question, references, settings)
+        if clarifying_questions:
+            logger.info(f"检测到歧义，生成 {len(clarifying_questions)} 个追问")
+            tracker.finish_run(status="clarify_needed")
+            return StreamingResponse(
+                stream_clarify_response(question, clarifying_questions),
+                media_type="text/event-stream",
+            )
+
     logger.info("Start generating answer")
     return StreamingResponse(
-        get_chat_completion(session_id, question, references, user_id, tracker=tracker, settings=settings),
+        get_chat_completion(session_id, effective_question, references, user_id, tracker=tracker, settings=settings),
         media_type="text/event-stream",
     )
 
@@ -294,6 +327,8 @@ async def chat_on_docs(
             db=db,
             trace_name="Chat on Docs",
             entry_method="chat_on_docs",
+            clarifications=request.clarifications,
+            original_question=request.original_question,
         )
     except HTTPException as e:
         logger.error(f"HTTP error: {str(e)}")

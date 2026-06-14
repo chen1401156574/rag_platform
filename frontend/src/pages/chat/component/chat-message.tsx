@@ -56,6 +56,9 @@ function AssistantMessage(props: {
         {(() => {
           switch (item.type) {
             case ChatType.Document:
+              if (item.clarifying_questions?.length) {
+                return null
+              }
               if (item.loading && !item.documents?.length) {
                 return <ChooseFile.Searching />
               } else if (!item.error) {

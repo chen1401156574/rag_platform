@@ -316,7 +316,7 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
     if retrieved_content:
         knowledge_base_refs = []
         for ref in retrieved_content:
-            knowledge_base_refs.append(f"[{reference_id}] {ref['content_with_weight']}")
+            knowledge_base_refs.append(f"##{reference_id}$$ {ref['content_with_weight']}")
             reference_id += 1
         if knowledge_base_refs:
             reference_parts.append("**知识库内容：**\n" + "\n".join(knowledge_base_refs))
@@ -331,7 +331,7 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
             truncated_content = quick_parse_content[:max_quick_content_length]
             if len(quick_parse_content) > max_quick_content_length:
                 truncated_content += "...(内容已截断)"
-            reference_parts.append(f"**当前会话文档内容：**\n[{reference_id}] {truncated_content}")
+            reference_parts.append(f"**当前会话文档内容：**\n##{reference_id}$$ {truncated_content}")
             reference_id += 1
     
     # 组合所有参考内容
@@ -516,3 +516,14 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
         }
         json_error_message = json.dumps(error_message)
         yield f"event: error\ndata: {json_error_message}\n\n"
+
+
+def stream_clarify_response(question: str, clarifying_questions: list[str]):
+    """生成追问事件的 SSE 流，前端收到后展示追问问题"""
+    message = {
+        "clarifying_questions": clarifying_questions,
+        "original_question": question,
+    }
+    json_message = json.dumps(message, ensure_ascii=False)
+    yield f"event: clarify\ndata: {json_message}\n\n"
+    yield f"event: end\ndata: [DONE]\n\n"
