@@ -684,7 +684,7 @@ export function AdminLayout() {
               <Button
                 variant="outline"
                 className="hidden items-center gap-2 sm:inline-flex"
-                onClick={() => navigate("/chat")}
+                onClick={() => navigate("/chat/")}
               >
                 <MessageSquare className="h-4 w-4" />
                 返回聊天

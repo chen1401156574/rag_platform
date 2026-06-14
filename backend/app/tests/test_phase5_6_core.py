@@ -110,7 +110,7 @@ class SettingsValidationTests(unittest.TestCase):
                     "defaultModel": "qwen2.5-72b-instruct",
                     "candidates": [
                         {"id": "qwen2.5-72b-instruct", "provider": "dashscope", "model": "qwen2.5-72b-instruct", "enabled": True},
-                        {"id": "deepseek-r1", "provider": "dashscope", "model": "deepseek-r1", "enabled": True},
+                        {"id": "deepseek-v4-pro", "provider": "dashscope", "model": "deepseek-v4-pro", "enabled": True},
                     ],
                 },
             },
@@ -174,7 +174,7 @@ class SettingsValidationTests(unittest.TestCase):
 
     def test_validate_default_model_is_valid_candidate(self):
         patch, err = settings_rt._validate_settings_patch(
-            {"ai": {"chat": {"defaultModel": "deepseek-r1"}}}, self.base_settings
+            {"ai": {"chat": {"defaultModel": "deepseek-v4-pro"}}}, self.base_settings
         )
         self.assertIsNone(err)
 

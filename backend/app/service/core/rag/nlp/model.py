@@ -32,7 +32,7 @@ def get_chat_completion_block(session_id, question, references):
     
         # 调用模型生成回答
         completion = client.chat.completions.create(
-            model=os.getenv("CHAT_MODEL", "deepseek-r1"),
+            model=os.getenv("CHAT_MODEL", "deepseek-v4-pro"),
             messages=[{"role": "user", "content": prompt}],
             stream=False,
         )

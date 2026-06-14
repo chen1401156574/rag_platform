@@ -8,6 +8,8 @@ export const transportToChatEnter = Symbol() as PageTransportKey<{
   data: ChatEnterData
 }>
 
+export const CHAT_SESSION_STORAGE_KEY = 'swxy-current-session-id'
+
 let id = 0
 
 export const createChatId = () => {

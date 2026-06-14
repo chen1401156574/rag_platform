@@ -74,8 +74,8 @@ DEFAULT_RUNTIME_RAG_SETTINGS: dict[str, Any] = {
             "messageChunkSize": 1,
         },
         "chat": {
-            "defaultModel": "qwen2.5-72b-instruct",
-            "deepThinkingModel": "deepseek-r1",
+            "defaultModel": "deepseek-v4-pro",
+            "deepThinkingModel": "deepseek-v4-pro",
             "candidates": [
                 {
                     "id": "qwen2.5-72b-instruct",
@@ -84,9 +84,9 @@ DEFAULT_RUNTIME_RAG_SETTINGS: dict[str, Any] = {
                     "enabled": True,
                 },
                 {
-                    "id": "deepseek-r1",
+                    "id": "deepseek-v4-pro",
                     "provider": "dashscope",
-                    "model": "deepseek-r1",
+                    "model": "deepseek-v4-pro",
                     "enabled": True,
                     "supportsThinking": True,
                 },
@@ -248,24 +248,6 @@ def _normalize_settings_patch(payload: dict[str, Any]) -> tuple[Optional[dict[st
             return None, "defaultModel must be one of the enabled chat candidates"
 
     return patch, None
-
-
-@router.get("/rag/settings")
-async def get_rag_settings(_: JwtAuthorizationCredentials = Security(access_security)):
-    return success_result(data=_settings_snapshot())
-
-
-@router.post("/rag/settings")
-async def save_rag_settings(
-    payload: dict[str, Any],
-    _: JwtAuthorizationCredentials = Security(access_security),
-):
-    patch, error = _normalize_settings_patch(payload)
-    if error:
-        return error_result(code="400", message=error)
-
-    _deep_update(_runtime_rag_settings, patch or {})
-    return success_result(data=_settings_snapshot())
 
 
 @router.get("/admin/dashboard/overview")

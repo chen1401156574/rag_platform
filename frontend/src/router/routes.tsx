@@ -4,12 +4,15 @@ import Chat from '@/pages/chat'
 import Index from '@/pages/index'
 import Login from '@/pages/login'
 import Repository from '@/pages/repository'
+import { useEffect } from 'react'
 import {
   Navigate,
   Outlet,
   RouteObject,
   createBrowserRouter,
   useLocation,
+  useNavigate,
+  useParams,
 } from 'react-router-dom'
 import { RouterGuard } from './guard'
 import { AdminLayout } from '@/pages/admin/AdminLayout'
@@ -27,6 +30,7 @@ import { SystemSettingsPage } from '@/pages/admin/settings/SystemSettingsPage'
 import { RagTraceDetailPage } from '@/pages/admin/traces/RagTraceDetailPage'
 import { RagTracePage } from '@/pages/admin/traces/RagTracePage'
 import { UserListPage } from '@/pages/admin/users/UserListPage'
+import { CHAT_SESSION_STORAGE_KEY } from '@/pages/chat/shared'
 import { decodeJwtSubject, isAdminSubject } from '@/utils/auth'
 import { storage } from '@/utils/storage'
 
@@ -44,8 +48,12 @@ export const routes: IRouteObject[] = [
     Component: Index,
   },
   {
-    path: '/chat/:id',
+    path: '/chat/',
     Component: Chat,
+  },
+  {
+    path: '/chat/:id',
+    Component: LegacyChatRedirect,
   },
   {
     path: '/repository',
@@ -62,6 +70,23 @@ function Layout() {
       </RouterGuard>
     </BaseLayout>
   )
+}
+
+function LegacyChatRedirect() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (id) {
+      localStorage.setItem(CHAT_SESSION_STORAGE_KEY, id)
+    }
+    navigate('/chat/', {
+      replace: true,
+      state: id ? { sessionId: id, selectedAt: Date.now() } : undefined,
+    })
+  }, [id, navigate])
+
+  return null
 }
 
 function AdminRoute() {

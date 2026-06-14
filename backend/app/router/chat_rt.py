@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Body, UploadFile, File, HTTPException, Query, Security, status, Depends
+import copy
 import uuid
 from schemas.chat import SessionResponse, ChatRequest
 from fastapi.responses import StreamingResponse
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from typing import List, Optional
 from service.core.file_parse import execute_insert_process
@@ -12,6 +14,8 @@ from service.core.retrieval import retrieve_content
 from service.core.chat import get_chat_completion
 from service.intent_engine import default_intent_router
 from service.auth import access_security
+from service.settings_service import get_retrieval_top_k, load_settings
+from service.trace_service import TraceTracker
 from utils import logger
 from database.knowledgebase_operations import insert_knowledgebase, verify_user_knowledgebase
 from sqlalchemy.orm import Session
@@ -32,6 +36,120 @@ logger.info(f"ELASTICSEARCH_URL: {os.getenv('ELASTICSEARCH_URL')}")
 
 router = APIRouter()
 intent_router = default_intent_router()
+
+
+def _get_chat_user(credentials: JwtAuthorizationCredentials) -> tuple[str, str]:
+    subject = credentials.subject or {}
+    user_id = subject.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    return str(user_id), subject.get("user_name", "user")
+
+
+def _stream_chat_response(
+    *,
+    session_id: str,
+    question: str,
+    user_id: str,
+    user_name: str,
+    db: Session,
+    trace_name: str,
+    entry_method: str,
+    deep_thinking: bool = False,
+):
+    tracker = TraceTracker(db)
+    tracker.start_run(
+        question=question,
+        conversation_id=session_id,
+        user_id=user_id,
+        user_name=user_name,
+        trace_name=trace_name,
+        entry_method=entry_method,
+    )
+
+    logger.info(
+        f"Start chat request: user_id={user_id}, session_id={session_id}, entry_method={entry_method}"
+    )
+    logger.info(f"Question: {question}")
+    settings = load_settings(db)
+    if deep_thinking:
+        deep_model = settings.get("ai", {}).get("chat", {}).get("deepThinkingModel")
+        if deep_model:
+            settings = copy.deepcopy(settings)
+            settings.setdefault("ai", {}).setdefault("chat", {})["defaultModel"] = deep_model
+    top_k = get_retrieval_top_k(settings)
+
+    intent_start = datetime.now()
+    decision = intent_router.decide(db, question, user_id)
+    intent_end = datetime.now()
+
+    intent_output = {}
+    if decision.intent:
+        intent_output = {
+            "intent_code": decision.intent.intent_code,
+            "name": decision.intent.name,
+            "kind": decision.intent.kind,
+            "score": decision.score,
+        }
+    tracker.record_node(
+        node_type="IntentClassify",
+        node_name="Intent Classification",
+        start_time=intent_start,
+        end_time=intent_end,
+        status="success",
+        input_data={"question": question},
+        output_data=intent_output,
+    )
+
+    if decision.intent:
+        logger.info(
+            f"Intent classified: code={decision.intent.intent_code}, "
+            f"stored_kind={decision.intent.kind}, score={decision.score}"
+        )
+    else:
+        logger.info("No reliable intent matched; using default retrieval route")
+
+    references = []
+    retrieval_start = datetime.now()
+    try:
+        logger.info("Start retrieving related content")
+        references = retrieve_content(
+            user_id,
+            question,
+            top_k=top_k,
+            kb_ids=None,
+        )
+        logger.info(f"Retrieved {len(references)} related references")
+        retrieval_end = datetime.now()
+
+        tracker.record_node(
+            node_type="VectorRetrieve",
+            node_name="Vector Retrieval",
+            start_time=retrieval_start,
+            end_time=retrieval_end,
+            status="success",
+            input_data={"question": question, "top_k": top_k},
+            output_data={"references_count": len(references), "references": references},
+        )
+    except Exception as e:
+        logger.info(f"Retrieval failed or no knowledge base is available: {str(e)}")
+        references = []
+        retrieval_end = datetime.now()
+        tracker.record_node(
+            node_type="VectorRetrieve",
+            node_name="Vector Retrieval",
+            start_time=retrieval_start,
+            end_time=retrieval_end,
+            status="failed",
+            error_message=str(e),
+            input_data={"question": question, "top_k": top_k},
+        )
+
+    logger.info("Start generating answer")
+    return StreamingResponse(
+        get_chat_completion(session_id, question, references, user_id, tracker=tracker, settings=settings),
+        media_type="text/event-stream",
+    )
 
 ##################################
 # 创建一个新的对话 Session
@@ -167,117 +285,27 @@ async def chat_on_docs(
     db: Session = Depends(get_db),
 ):
     try:
-        user_id = str(credentials.subject.get("user_id"))
-        user_name = credentials.subject.get("user_name", "user")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        
-        # 启动 Trace 追踪记录
-        from service.trace_service import TraceTracker
-        from datetime import datetime
-        tracker = TraceTracker(db)
-        tracker.start_run(
+        user_id, user_name = _get_chat_user(credentials)
+        return _stream_chat_response(
+            session_id=session_id,
             question=request.message,
-            conversation_id=session_id,
             user_id=user_id,
             user_name=user_name,
+            db=db,
             trace_name="Chat on Docs",
-            entry_method="chat_on_docs"
+            entry_method="chat_on_docs",
         )
-
-        logger.info(f"开始处理用户 {user_id} 的请求")
-        logger.info(f"问题内容: {request.message}")
-        
-        question = request.message
-        
-        # 意图分类节点打点
-        intent_start = datetime.now()
-        decision = intent_router.decide(db, question, user_id)
-        intent_end = datetime.now()
-        
-        intent_output = {}
-        if decision.intent:
-            intent_output = {
-                "intent_code": decision.intent.intent_code,
-                "name": decision.intent.name,
-                "kind": decision.intent.kind,
-                "score": decision.score
-            }
-        tracker.record_node(
-            node_type="IntentClassify",
-            node_name="Intent Classification",
-            start_time=intent_start,
-            end_time=intent_end,
-            status="success",
-            input_data={"question": question},
-            output_data=intent_output
-        )
-
-        if decision.intent:
-            logger.info(
-                f"Intent classified: code={decision.intent.intent_code}, "
-                f"stored_kind={decision.intent.kind}, score={decision.score}"
-            )
-        else:
-            logger.info("未命中可信意图，使用默认知识库检索路由")
-
-        # 尝试从知识库检索内容，如果没有知识库也不报错
-        references = []
-        retrieval_start = datetime.now()
-        try:
-            logger.info("开始检索相关内容...")
-            references = retrieve_content(
-                user_id,
-                question,
-                top_k=5,
-                kb_ids=None,
-            )
-            logger.info(f"检索到 {len(references)} 条相关内容")
-            retrieval_end = datetime.now()
-            
-            tracker.record_node(
-                node_type="VectorRetrieve",
-                node_name="Vector Retrieval",
-                start_time=retrieval_start,
-                end_time=retrieval_end,
-                status="success",
-                input_data={"question": question, "top_k": 5},
-                output_data={"references_count": len(references), "references": references}
-            )
-        except Exception as e:
-            logger.info(f"用户 {user_id} 没有知识库或检索失败: {str(e)}，将不使用知识库内容")
-            references = []
-            retrieval_end = datetime.now()
-            tracker.record_node(
-                node_type="VectorRetrieve",
-                node_name="Vector Retrieval",
-                start_time=retrieval_start,
-                end_time=retrieval_end,
-                status="failed",
-                error_message=str(e),
-                input_data={"question": question, "top_k": 5}
-            )
-
-        logger.info("开始生成回答...")
-        # 返回流式响应
-        return StreamingResponse(
-            get_chat_completion(session_id, question, references, user_id, tracker=tracker),
-            media_type="text/event-stream"
-        )
-    
     except HTTPException as e:
-        logger.error(f"HTTP错误: {str(e)}")
+        logger.error(f"HTTP error: {str(e)}")
         raise e
     except Exception as e:
-        logger.exception(f"发生未知错误: {str(e)}")
+        logger.exception(f"Unknown chat error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
-##################################
-# 兼容 Ragent 前端的流式对话接口
-##################################
+
 @router.get("/rag/v3/chat")
 async def ragent_chat_compat(
     question: str = Query(..., description="User message"),
@@ -287,111 +315,28 @@ async def ragent_chat_compat(
     db: Session = Depends(get_db),
 ):
     try:
-        user_id = str(credentials.subject.get("user_id"))
-        user_name = credentials.subject.get("user_name", "user")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-
-        session_id = conversationId
-        if not session_id:
-            # 如果前端没传 conversationId，自动生成一个
-            session_id = str(uuid.uuid4()).replace("-", "")[:16]
-
-        # 启动 Trace 追踪记录
-        from service.trace_service import TraceTracker
-        from datetime import datetime
-        tracker = TraceTracker(db)
-        tracker.start_run(
+        user_id, user_name = _get_chat_user(credentials)
+        session_id = conversationId or str(uuid.uuid4()).replace("-", "")[:16]
+        if deepThinking:
+            logger.info("deepThinking is accepted for compatibility and handled by the shared chat chain")
+        return _stream_chat_response(
+            session_id=session_id,
             question=question,
-            conversation_id=session_id,
             user_id=user_id,
             user_name=user_name,
+            db=db,
             trace_name="Ragent Chat Compat",
-            entry_method="ragent_chat_compat"
-        )
-
-        logger.info(f"开始处理用户 {user_id} 的兼容请求, session_id: {session_id}")
-        logger.info(f"问题内容: {question}")
-        
-        # 意图分类节点打点
-        intent_start = datetime.now()
-        decision = intent_router.decide(db, question, user_id)
-        intent_end = datetime.now()
-        
-        intent_output = {}
-        if decision.intent:
-            intent_output = {
-                "intent_code": decision.intent.intent_code,
-                "name": decision.intent.name,
-                "kind": decision.intent.kind,
-                "score": decision.score
-            }
-        tracker.record_node(
-            node_type="IntentClassify",
-            node_name="Intent Classification",
-            start_time=intent_start,
-            end_time=intent_end,
-            status="success",
-            input_data={"question": question},
-            output_data=intent_output
-        )
-
-        if decision.intent:
-            logger.info(
-                f"Intent classified: code={decision.intent.intent_code}, "
-                f"stored_kind={decision.intent.kind}, score={decision.score}"
-            )
-        else:
-            logger.info("未命中可信意图，使用默认知识库检索路由")
-
-        # 知识库检索节点打点
-        references = []
-        retrieval_start = datetime.now()
-        try:
-            logger.info("开始检索相关内容...")
-            references = retrieve_content(
-                user_id,
-                question,
-                top_k=5,
-                kb_ids=None,
-            )
-            retrieval_end = datetime.now()
-            
-            tracker.record_node(
-                node_type="VectorRetrieve",
-                node_name="Vector Retrieval",
-                start_time=retrieval_start,
-                end_time=retrieval_end,
-                status="success",
-                input_data={"question": question, "top_k": 5},
-                output_data={"references_count": len(references), "references": references}
-            )
-        except Exception as e:
-            logger.info(f"检索失败: {str(e)}，将不使用知识库内容")
-            retrieval_end = datetime.now()
-            tracker.record_node(
-                node_type="VectorRetrieve",
-                node_name="Vector Retrieval",
-                start_time=retrieval_start,
-                end_time=retrieval_end,
-                status="failed",
-                error_message=str(e),
-                input_data={"question": question, "top_k": 5}
-            )
-
-        return StreamingResponse(
-            get_chat_completion(session_id, question, references, user_id, tracker=tracker),
-            media_type="text/event-stream"
+            entry_method="ragent_chat_compat",
+            deep_thinking=bool(deepThinking),
         )
     except HTTPException as e:
         raise e
     except Exception as e:
-        logger.exception(f"发生未知错误: {str(e)}")
+        logger.exception(f"Unknown chat error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
 
 @router.post("/upload_files")
 async def upload_files(

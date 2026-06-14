@@ -1,4 +1,5 @@
 import * as api from '@/api'
+import { CHAT_SESSION_STORAGE_KEY } from '@/pages/chat/shared'
 import { sessionActions, sessionState } from '@/store/session'
 import { useRequest } from 'ahooks'
 import { Collapse } from 'antd'
@@ -42,7 +43,15 @@ export function Nav() {
               <div
                 className="base-layout-nav__item"
                 key={item.session_id}
-                onClick={() => navigate(`/chat/${item.session_id}`)}
+                onClick={() => {
+                  localStorage.setItem(CHAT_SESSION_STORAGE_KEY, item.session_id)
+                  navigate('/chat/', {
+                    state: {
+                      sessionId: item.session_id,
+                      selectedAt: Date.now(),
+                    },
+                  })
+                }}
               >
                 <div className="time">
                   {dayjs(item.created_at).format('HH:mm YYYY/MM/DD')}

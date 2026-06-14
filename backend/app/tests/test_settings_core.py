@@ -1,4 +1,5 @@
 import logging
+import json
 import sys
 import types
 import unittest
@@ -45,17 +46,44 @@ if "fastapi_jwt" not in sys.modules:
     fastapi_jwt_stub.JwtAccessBearerCookie = JwtAccessBearerCookie
     sys.modules["fastapi_jwt"] = fastapi_jwt_stub
 
-from router import ragent_admin_rt
+from router import settings_rt
+from models.system_config import SystemConfig
+
+
+class _ScalarResult:
+    def __init__(self, db):
+        self.db = db
+
+    def first(self):
+        return self.db.row
+
+
+class _FakeDb:
+    def __init__(self):
+        self.row = None
+        self.committed = False
+        self.rolled_back = False
+
+    def scalars(self, *_):
+        return _ScalarResult(self)
+
+    def add(self, row):
+        self.row = row
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
 
 
 class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        if hasattr(ragent_admin_rt, "reset_runtime_rag_settings"):
-            ragent_admin_rt.reset_runtime_rag_settings()
+        self.db = _FakeDb()
         self.credentials = SimpleNamespace(subject={"role": "admin", "status": 1})
 
     async def test_save_runtime_rag_settings_updates_tunable_fields_and_masks_secrets(self):
-        result = await ragent_admin_rt.save_rag_settings(
+        result = await settings_rt.save_settings(
             {
                 "rag": {
                     "retrieval": {"topK": 8},
@@ -65,11 +93,12 @@ class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
                     },
                 },
                 "ai": {
-                    "chat": {"defaultModel": "deepseek-r1"},
+                    "chat": {"defaultModel": "deepseek-v4-pro"},
                     "providers": {"dashscope": {"apiKey": "should-not-be-returned"}},
                 },
             },
-            self.credentials,
+            db=self.db,
+            _=self.credentials,
         )
 
         self.assertEqual(result["code"], "0")
@@ -77,20 +106,48 @@ class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data["rag"]["retrieval"]["topK"], 8)
         self.assertEqual(data["rag"]["generation"]["temperature"], 0.25)
         self.assertEqual(data["rag"]["generation"]["promptTemplate"], "Answer with citations for: {question}")
-        self.assertEqual(data["ai"]["chat"]["defaultModel"], "deepseek-r1")
+        self.assertEqual(data["ai"]["chat"]["defaultModel"], "deepseek-v4-pro")
         self.assertIsNone(data["ai"]["providers"]["dashscope"]["apiKey"])
 
-        read_back = await ragent_admin_rt.get_rag_settings(self.credentials)
+        read_back = await settings_rt.get_settings(db=self.db, _=self.credentials)
         self.assertEqual(read_back["data"]["rag"]["retrieval"]["topK"], 8)
         self.assertEqual(read_back["data"]["rag"]["generation"]["temperature"], 0.25)
 
     async def test_save_runtime_rag_settings_rejects_out_of_range_values(self):
-        result = await ragent_admin_rt.save_rag_settings(
+        result = await settings_rt.save_settings(
             {"rag": {"retrieval": {"topK": 0}, "generation": {"temperature": 3}}},
-            self.credentials,
+            db=self.db,
+            _=self.credentials,
         )
 
         self.assertEqual(result["code"], "400")
+
+    async def test_saved_legacy_candidates_are_backfilled_with_deepseek_v4_pro(self):
+        self.db.row = SystemConfig(
+            config_key="rag_settings",
+            config_value=json.dumps(
+                {
+                    "ai": {
+                        "chat": {
+                            "defaultModel": "qwen2.5-72b-instruct",
+                            "candidates": [
+                                {
+                                    "id": "qwen2.5-72b-instruct",
+                                    "provider": "dashscope",
+                                    "model": "qwen2.5-72b-instruct",
+                                    "enabled": True,
+                                }
+                            ],
+                        }
+                    }
+                }
+            ),
+        )
+
+        result = await settings_rt.get_settings(db=self.db, _=self.credentials)
+        candidates = result["data"]["ai"]["chat"]["candidates"]
+
+        self.assertIn("deepseek-v4-pro", {item["id"] for item in candidates})
 
 
 if __name__ == "__main__":

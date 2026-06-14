@@ -6,10 +6,26 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from utils.database import get_db
 from fastapi import HTTPException
+from service.settings_service import get_chat_model, get_generation_temperature, get_prompt_template
 from utils import logger
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def render_prompt_template(template: str, question: str, formatted_references: str) -> str:
+    has_references = "{references}" in template or "{formatted_references}" in template
+    has_question = "{question}" in template
+    prompt = (
+        template.replace("{formatted_references}", formatted_references)
+        .replace("{references}", formatted_references)
+        .replace("{question}", question)
+    )
+    if not has_references:
+        prompt = f"{prompt}\n\n参考内容：\n{formatted_references}"
+    if not has_question:
+        prompt = f"{prompt}\n\n用户问题：\n{question}"
+    return prompt
 
 # Redis 客户端初始化
 def get_redis_client():
@@ -277,7 +293,7 @@ def update_session_name(session_id: str, question: str, user_id: str):
     finally:
         db.close()
 
-def get_chat_completion(session_id, question, retrieved_content, user_id, tracker=None):
+def get_chat_completion(session_id, question, retrieved_content, user_id, tracker=None, settings=None):
     """
     获取流式聊天完成结果，并按照指定格式输出。
 
@@ -286,6 +302,7 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
     :param retrieved_content: 从知识库检索的内容
     :param user_id: 用户ID
     :param tracker: 链路追踪器 Tracker
+    :param settings: 系统设置快照
     :return: 流式输出的生成器，每个元素为符合 SSE 格式的字符串
     """
     # 获取快速解析的文档内容
@@ -323,24 +340,8 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
     else:
         formatted_references = "暂无相关参考内容"
     
-    prompt = f"""
-你是一个专业的智能助手，擅长基于提供的参考资料回答用户问题。请遵循以下原则：
-
-**回答要求：**
-1. 优先基于参考内容回答，确保答案准确可靠
-2. 在回答中，每一块内容都必须标注引用的来源，格式为：##引用编号$$。例如：##1$$ 表示引用自第1条参考内容。
-3. 如果参考内容不足以完全回答问题，可以结合常识补充，但需明确区分
-4. 回答要条理清晰、语言自然流畅
-5. 如果没有相关参考内容，请诚实说明并提供一般性建议
-
-**参考内容：**
-{formatted_references}
-
-**用户问题：**
-{question}
-
-请基于以上信息提供专业、准确的回答。
-    """
+    prompt_template = get_prompt_template(settings or {})
+    prompt = render_prompt_template(prompt_template, question, formatted_references)
 
     print(prompt)
 
@@ -358,11 +359,12 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
 
         # 创建聊天完成请求
         completion = client.chat.completions.create(
-            model=os.getenv("CHAT_MODEL", "deepseek-r1"),  # 可按需更换模型名称
+            model=get_chat_model(settings or {}),  # 可按需更换模型名称
             messages=[
                 {"role": "user", "content": prompt}
             ],
             stream=True,
+            temperature=get_generation_temperature(settings or {}),
         )
 
         # 返回检索内容和快速解析内容
@@ -514,4 +516,3 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
         }
         json_error_message = json.dumps(error_message)
         yield f"event: error\ndata: {json_error_message}\n\n"
-

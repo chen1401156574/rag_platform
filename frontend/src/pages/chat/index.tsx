@@ -9,7 +9,7 @@ import { usePageTransport } from '@/utils'
 import { useMount, useRequest, useUnmount } from 'ahooks'
 import { Button, Drawer } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { proxy, useSnapshot } from 'valtio'
 import { sessionActions } from '../../store/session'
 import ChatMessage from './component/chat-message'
@@ -18,7 +18,12 @@ import Contracts from './component/contracts'
 import ChatDrawer from './component/drawer'
 import Source from './component/source'
 import styles from './index.module.scss'
-import { createChatId, createChatIdText, transportToChatEnter } from './shared'
+import {
+  CHAT_SESSION_STORAGE_KEY,
+  createChatId,
+  createChatIdText,
+  transportToChatEnter,
+} from './shared'
 
 async function scrollToBottom(container: HTMLDivElement | null) {
   if (!container) return
@@ -38,10 +43,19 @@ async function scrollToBottom(container: HTMLDivElement | null) {
   }
 }
 
+type ChatRouteState = {
+  sessionId?: string
+  resetSessionAt?: number
+  selectedAt?: number
+}
+
 export default function Index() {
-  const { id } = useParams()
+  const location = useLocation()
   const { data: ctx } = usePageTransport(transportToChatEnter)
   const contentRef = useRef<HTMLDivElement>(null)
+  const initializedRef = useRef(false)
+  const routeStateKeyRef = useRef<string | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
 
   const [chat] = useState(() => {
     return proxy({
@@ -49,21 +63,24 @@ export default function Index() {
     })
   })
   const { list } = useSnapshot(chat) as { list: API.ChatItem[] }
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [documents, setDocuments] = useState<API.Document[]>([])
   const [currentChatItem, setCurrentChatItem] = useState<API.ChatItem | null>(
     null,
   )
+  const [read, setRead] = useState<API.Reference | null>(null)
 
   const history = useRequest(
-    async () => {
+    async (targetSessionId: string) => {
       const { data } = await api.session.detail({
-        session_id: id!,
+        session_id: targetSessionId,
       })
       return data
     },
     {
       manual: true,
       onSuccess(data) {
+        chat.list = []
         data.forEach((item) => {
           if (item.user_question) {
             chat.list.push({
@@ -137,6 +154,70 @@ export default function Index() {
   }, [list, history.loading])
   const loadingRef = useRef(loading)
   loadingRef.current = loading
+
+  const resetChatView = useCallback(() => {
+    chat.list = []
+    setDocuments([])
+    setCurrentChatItem(null)
+    setRead(null)
+  }, [chat])
+
+  const setActiveSession = useCallback(
+    (targetSessionId: string, loadHistory = true) => {
+      sessionIdRef.current = targetSessionId
+      localStorage.setItem(CHAT_SESSION_STORAGE_KEY, targetSessionId)
+      setSessionId(targetSessionId)
+      resetChatView()
+      if (loadHistory) {
+        history.run(targetSessionId)
+      }
+    },
+    [history, resetChatView],
+  )
+
+  const ensureSession = useCallback(async () => {
+    const storedSessionId = localStorage.getItem(CHAT_SESSION_STORAGE_KEY)
+    if (sessionIdRef.current) {
+      return sessionIdRef.current
+    }
+    if (storedSessionId) {
+      sessionIdRef.current = storedSessionId
+      setSessionId(storedSessionId)
+      return storedSessionId
+    }
+
+    const { data } = await api.session.create()
+    sessionIdRef.current = data.session_id
+    localStorage.setItem(CHAT_SESSION_STORAGE_KEY, data.session_id)
+    setSessionId(data.session_id)
+    return data.session_id
+  }, [])
+
+  const activateSession = useCallback(
+    async (routeState?: ChatRouteState | null, loadHistory = true) => {
+      let targetSessionId = routeState?.sessionId
+      let createdNew = false
+
+      if (routeState?.resetSessionAt) {
+        localStorage.removeItem(CHAT_SESSION_STORAGE_KEY)
+        targetSessionId = undefined
+      }
+
+      if (!targetSessionId) {
+        targetSessionId = localStorage.getItem(CHAT_SESSION_STORAGE_KEY) || undefined
+      }
+
+      if (!targetSessionId) {
+        const { data } = await api.session.create()
+        targetSessionId = data.session_id
+        createdNew = true
+      }
+
+      setActiveSession(targetSessionId, loadHistory && !createdNew)
+      return targetSessionId
+    },
+    [setActiveSession],
+  )
   useEffect(() => {
     deviceActions.setChatting(loading)
   }, [loading])
@@ -145,13 +226,13 @@ export default function Index() {
   })
 
   const sendChat = useCallback(
-    async (target: API.ChatItem, message: string) => {
+    async (target: API.ChatItem, message: string, targetSessionId: string) => {
       setCurrentChatItem(target)
       target.loading = true
       try {
         //后端接口
         const res = await api.session.chat({
-          id: id!,
+          id: targetSessionId,
           message,
         })
         sessionActions.updateKey()
@@ -239,13 +320,15 @@ export default function Index() {
         }
       }
     },
-    [chat],
+    [],
   )
 
   const send = useCallback(
-    async (message: string) => {
+    async (message: string, activeSessionId?: string) => {
       if (loadingRef.current) return
       if (!message) return
+
+      const targetSessionId = activeSessionId || (await ensureSession())
 
       if (chat.list.length === 0) {
         chat.list.push({
@@ -264,7 +347,7 @@ export default function Index() {
 
         const target = chat.list[chat.list.length - 1]
 
-        await sendChat(target, message!)
+        await sendChat(target, message!, targetSessionId)
       } else {
         chat.list.push({
           id: createChatId(),
@@ -283,18 +366,35 @@ export default function Index() {
 
         const target = chat.list[chat.list.length - 1]
 
-        await sendChat(target, message!)
+        await sendChat(target, message!, targetSessionId)
       }
     },
-    [chat, sendChat],
+    [chat, ensureSession, sendChat],
   )
   useMount(async () => {
+    const routeState = (location.state || null) as ChatRouteState | null
+    routeStateKeyRef.current = routeState
+      ? `${routeState.sessionId || ''}:${routeState.resetSessionAt || ''}:${routeState.selectedAt || ''}`
+      : null
+    const targetSessionId = await activateSession(routeState, !ctx?.data.message)
+    initializedRef.current = true
+
     if (ctx?.data.message) {
-      send(ctx.data.message)
-    } else {
-      history.run()
+      send(ctx.data.message, targetSessionId)
     }
   })
+
+  useEffect(() => {
+    if (!initializedRef.current) return
+
+    const routeState = (location.state || null) as ChatRouteState | null
+    if (!routeState?.sessionId && !routeState?.resetSessionAt) return
+    const routeStateKey = `${routeState.sessionId || ''}:${routeState.resetSessionAt || ''}:${routeState.selectedAt || ''}`
+    if (routeStateKeyRef.current === routeStateKey) return
+    routeStateKeyRef.current = routeStateKey
+
+    activateSession(routeState)
+  }, [activateSession, location.state])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -348,8 +448,6 @@ export default function Index() {
     return list[0]?.content ?? '新对话'
   }, [list[0]])
 
-  const [read, setRead] = useState<API.Reference | null>(null)
-
   return (
     <ComPageLayout
       contentRef={contentRef}
@@ -358,7 +456,7 @@ export default function Index() {
           {documents.length > 0 && <Source list={documents} />}
           <ComSender
             loading={loading}
-            sessionId={id}
+            sessionId={sessionId || undefined}
             onSend={send}
             onContract={() => setCurrentChatItem(null)}
           />
