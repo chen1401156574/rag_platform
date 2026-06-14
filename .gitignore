@@ -1,0 +1,47 @@
+# =========================
+# Backend (Python) 忽略规则
+# =========================
+**/__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+.env
+backend/app/service/ragflow/rag/res/*
+
+# =========================
+# Frontend (Node/React) 忽略规则
+# =========================
+node_modules/
+dist/
+dist-ssr/
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.local
+
+# =========================
+# 编辑器与系统 忽略规则
+# =========================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.sw?
+
+
+wsl启动rag项目/
+tmp/
+
+# =========================
+# 临时测试文件与数据 忽略规则
+# =========================
+*.pdf
+*.docx
+*.txt
+backend/nltk_data/
