@@ -15,6 +15,7 @@ import {
   Hash,
   X,
   Copy,
+  Download,
   Target,
   Crosshair,
   HelpCircle
@@ -62,18 +63,20 @@ const copyToClipboard = (text: string, label: string) => {
 
 // ============ 状态颜色 ============
 
-type StatusType = "success" | "failed" | "running" | "default";
+type StatusColor = { dot: string; bar: string };
 
-const STATUS_COLORS: Record<StatusType, { dot: string; bar: string }> = {
+const STATUS_COLORS: Record<string, StatusColor> = {
   success: { dot: "bg-emerald-500", bar: "bg-emerald-400" },
   failed: { dot: "bg-red-500", bar: "bg-red-400" },
   running: { dot: "bg-amber-500", bar: "bg-amber-400" },
+  timeout: { dot: "bg-red-500", bar: "bg-red-400" },
+  clarify_needed: { dot: "bg-amber-500", bar: "bg-amber-400" },
   default: { dot: "bg-slate-300", bar: "bg-slate-300" }
 };
 
-const getStatusColors = (status?: string | null) => {
-  const normalized = normalizeStatus(status) as StatusType | null;
-  return STATUS_COLORS[normalized || "default"];
+const getStatusColors = (status?: string | null): StatusColor => {
+  const normalized = normalizeStatus(status);
+  return STATUS_COLORS[normalized] ?? STATUS_COLORS.default;
 };
 
 // ============ 子组件 ============
@@ -410,6 +413,208 @@ function truncateText(value?: string | null, limit = 260): string {
   const text = (value || "").trim();
   if (!text) return "—";
   return text.length > limit ? `${text.slice(0, limit)}...` : text;
+}
+
+function markdownCell(value?: string | number | null): string {
+  const text = value === null || value === undefined || value === "" ? "—" : String(value);
+  return text.replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
+}
+
+function markdownCodeFence(language: string, content: string): string {
+  let fence = "```";
+  while (content.includes(fence)) {
+    fence += "`";
+  }
+  return `${fence}${language}\n${content}\n${fence}`;
+}
+
+function safeFilePart(value: string): string {
+  return value
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 120);
+}
+
+function buildTraceExportFileName(run: RagTraceDetail["run"]): string {
+  const startedAt = run.startTime ? new Date(run.startTime) : new Date();
+  const timestamp = Number.isNaN(startedAt.getTime())
+      ? new Date().toISOString()
+      : startedAt.toISOString();
+  const safeTime = timestamp.replace(/[:.]/g, "-");
+  const tracePart = safeFilePart(run.traceId || "unknown-trace");
+  return `rag-trace-${tracePart}-${safeTime}.md`;
+}
+
+function downloadTextFile(fileName: string, content: string, type = "text/markdown;charset=utf-8") {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function buildTraceExportMarkdown(detail: RagTraceDetail): string {
+  const run = detail.run;
+  const nodes = detail.nodes || [];
+  const exportedAt = formatDateTime(Date.now());
+  const userName = run.userName || run.username || run.userId || "—";
+  const failedNodes = nodes.filter((node) => {
+    const status = normalizeStatus(node.status);
+    return status === "failed" || status === "timeout";
+  });
+
+  const mergeNode = findNode(nodes, "ClarificationMerge");
+  const finalNode = findNode(nodes, "LLMFinalAnswer");
+  const llmNode = findNode(nodes, "LLMCall");
+  const clarifyNode = findNode(nodes, "ClarifyResponse");
+  const contextNode = findNode(nodes, "ContextAssemble");
+  const promptNode = findNode(nodes, "PromptBuild");
+  const recommendNode = findNode(nodes, "RecommendQuestions");
+
+  const mergeInput = getNodeInput(mergeNode);
+  const mergeOutput = getNodeOutput(mergeNode);
+  const finalOutput = getNodeOutput(finalNode);
+  const llmOutput = getNodeOutput(llmNode);
+  const clarifyOutput = getNodeOutput(clarifyNode);
+  const contextOutput = getNodeOutput(contextNode);
+  const promptOutput = getNodeOutput(promptNode);
+  const recommendOutput = getNodeOutput(recommendNode);
+
+  const originalQuestion = mergeInput?.original_question || run.question || "";
+  const effectiveQuestion = mergeOutput?.effective_question || run.question || "";
+  const finalAnswerSummary = finalOutput?.answer_summary || llmOutput?.answer || "";
+  const clarifyQuestions = Array.isArray(clarifyOutput?.clarifying_questions)
+      ? clarifyOutput.clarifying_questions
+      : [];
+
+  const stageRows = END_TO_END_STAGES.map((stage) => {
+    const stageNodes = nodes.filter((node) => stage.nodeTypes.includes(node.nodeType || ""));
+    const hasFailed = stageNodes.some((node) => {
+      const status = normalizeStatus(node.status);
+      return status === "failed" || status === "timeout";
+    });
+    const hasRunning = stageNodes.some((node) => normalizeStatus(node.status) === "running");
+    const status = !stageNodes.length ? "未记录" : hasFailed ? "异常" : hasRunning ? "运行中" : "完成";
+    const duration = stageNodes.reduce((sum, node) => sum + resolveNodeDuration(node), 0);
+    const nodeNames = stageNodes
+        .map((node) => prettifyNodeName(node.nodeName || node.nodeType || node.nodeId))
+        .join(", ");
+    return `| ${markdownCell(stage.title)} | ${markdownCell(status)} | ${markdownCell(stageNodes.length)} | ${markdownCell(formatDuration(duration))} | ${markdownCell(nodeNames)} |`;
+  }).join("\n");
+
+  const nodeRows = nodes.length
+      ? nodes.map((node, index) => {
+        const displayName = prettifyNodeName(node.nodeName || node.methodName || node.nodeId);
+        return `| ${index + 1} | ${markdownCell(displayName)} | ${markdownCell(node.nodeType)} | ${markdownCell(statusLabel(node.status))} | ${markdownCell(formatDuration(resolveNodeDuration(node)))} | ${markdownCell(formatDateTime(node.startTime ?? undefined))} | ${markdownCell(formatDateTime(node.endTime ?? undefined))} | ${markdownCell(node.parentNodeId)} |`;
+      }).join("\n")
+      : "| — | — | — | — | — | — | — | — |";
+
+  const nodeDetails = nodes.length
+      ? nodes.map((node, index) => {
+        const displayName = prettifyNodeName(node.nodeName || node.methodName || node.nodeId);
+        const blocks = [
+          `### ${index + 1}. ${displayName}`,
+          `- Node Id: \`${node.nodeId}\``,
+          `- Parent Node Id: \`${node.parentNodeId || "—"}\``,
+          `- 类型：${node.nodeType || "—"}`,
+          `- 状态：${statusLabel(node.status)}`,
+          `- 耗时：${formatDuration(resolveNodeDuration(node))}`,
+          `- 开始时间：${formatDateTime(node.startTime ?? undefined)}`,
+          `- 结束时间：${formatDateTime(node.endTime ?? undefined)}`,
+          node.errorMessage
+              ? `\n**错误信息**\n\n${markdownCodeFence("text", node.errorMessage)}`
+              : "",
+          node.inputJson
+              ? `\n**输入 JSON**\n\n${markdownCodeFence("json", tryPrettyJson(node.inputJson))}`
+              : "\n**输入 JSON**：无",
+          node.outputJson
+              ? `\n**输出 JSON**\n\n${markdownCodeFence("json", tryPrettyJson(node.outputJson))}`
+              : "\n**输出 JSON**：无",
+          node.extraData
+              ? `\n**额外数据**\n\n${markdownCodeFence("json", tryPrettyJson(node.extraData))}`
+              : "\n**额外数据**：无"
+        ];
+        return blocks.filter(Boolean).join("\n");
+      }).join("\n\n")
+      : "暂无节点详情。";
+
+  return [
+    "# RAG 单轮问答全链路详情",
+    "",
+    `导出时间：${exportedAt}`,
+    "",
+    "## 运行概览",
+    "",
+    "| 字段 | 值 |",
+    "| --- | --- |",
+    `| Trace Id | ${markdownCell(run.traceId)} |`,
+    `| 会话 ID | ${markdownCell(run.sessionId || run.conversationId)} |`,
+    `| 用户 | ${markdownCell(userName)} |`,
+    `| 状态 | ${markdownCell(statusLabel(run.status))} |`,
+    `| 链路名称 | ${markdownCell(run.traceName)} |`,
+    `| 入口方法 | ${markdownCell(run.entryMethod)} |`,
+    `| 开始时间 | ${markdownCell(formatDateTime(run.startTime ?? undefined))} |`,
+    `| 结束时间 | ${markdownCell(formatDateTime(run.endTime ?? undefined))} |`,
+    `| 总耗时 | ${markdownCell(formatDuration(run.durationMs ?? undefined))} |`,
+    `| 首包耗时 | ${markdownCell(run.ttftMs != null ? formatDuration(run.ttftMs) : "—")} |`,
+    `| 节点数 | ${markdownCell(nodes.length)} |`,
+    `| 失败节点数 | ${markdownCell(failedNodes.length)} |`,
+    "",
+    "## 问答摘要",
+    "",
+    "### 用户原始问题",
+    "",
+    originalQuestion || "—",
+    "",
+    "### 有效问题",
+    "",
+    effectiveQuestion || "—",
+    "",
+    clarifyQuestions.length ? "### 追问问题" : "### 模型最终回答摘要",
+    "",
+    clarifyQuestions.length
+        ? clarifyQuestions.map((question: string, index: number) => `${index + 1}. ${question}`).join("\n")
+        : finalAnswerSummary || "—",
+    "",
+    "### 生成指标",
+    "",
+    "| 指标 | 值 |",
+    "| --- | --- |",
+    `| 回答字符数 | ${markdownCell(finalOutput?.answer_chars)} |`,
+    `| 思考字符数 | ${markdownCell(finalOutput?.thinking_chars)} |`,
+    `| 引用标记数 | ${markdownCell(finalOutput?.citation_marker_count)} |`,
+    `| 总引用数 | ${markdownCell(contextOutput?.total_reference_count)} |`,
+    `| 推荐问题数 | ${markdownCell(recommendOutput?.recommended_question_count)} |`,
+    `| Prompt 长度 | ${markdownCell(promptOutput?.prompt_length)} |`,
+    `| 引用范围 | ${markdownCell(promptOutput?.reference_range)} |`,
+    "",
+    "## 阶段摘要",
+    "",
+    "| 阶段 | 状态 | 节点数 | 累计耗时 | 节点 |",
+    "| --- | --- | ---: | ---: | --- |",
+    stageRows,
+    "",
+    "## 节点列表",
+    "",
+    "| 序号 | 节点 | 类型 | 状态 | 耗时 | 开始时间 | 结束时间 | 父节点 |",
+    "| ---: | --- | --- | --- | ---: | --- | --- | --- |",
+    nodeRows,
+    "",
+    "## 节点详情",
+    "",
+    nodeDetails,
+    "",
+    "## 原始详情 JSON",
+    "",
+    markdownCodeFence("json", JSON.stringify(detail, null, 2)),
+    ""
+  ].join("\n");
 }
 
 const END_TO_END_STAGES: Array<{
@@ -841,6 +1046,22 @@ export function RagTraceDetailPage() {
     return detail?.nodes?.find(n => n.nodeId === activeNodeId) || null;
   }, [detail?.nodes, activeNodeId]);
 
+  const handleExportDetail = () => {
+    if (!detail) {
+      toast.error("暂无可导出的链路详情");
+      return;
+    }
+
+    try {
+      const content = buildTraceExportMarkdown(detail);
+      downloadTextFile(buildTraceExportFileName(detail.run), content);
+      toast.success("单轮问答全链路详情已导出");
+    } catch (error) {
+      console.error(error);
+      toast.error("导出链路详情失败");
+    }
+  };
+
   if (detailLoading) {
     return (
         <div className="min-h-[400px] flex items-center justify-center">
@@ -933,6 +1154,16 @@ export function RagTraceDetailPage() {
                 <ArrowLeft className="mr-1.5 h-4 w-4" />
                 返回列表
               </Link>
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                className="text-slate-600 hover:text-slate-800"
+                onClick={handleExportDetail}
+                disabled={!detail || detailLoading}
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              导出
             </Button>
             <Button
                 variant="outline"

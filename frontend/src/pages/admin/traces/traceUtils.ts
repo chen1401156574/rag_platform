@@ -44,13 +44,14 @@ export const statusLabel = (status?: string | null): string => {
   if (normalized === "failed") return "FAILED";
   if (normalized === "running") return "RUNNING";
   if (normalized === "timeout") return "TIMEOUT";
+  if (normalized === "clarify_needed") return "等待补充";
   return normalized.toUpperCase();
 };
 
 export const statusBadgeVariant = (status?: string | null): BadgeVariant => {
   const normalized = normalizeStatus(status);
   if (normalized === "failed" || normalized === "timeout") return "destructive";
-  if (normalized === "running") return "secondary";
+  if (normalized === "running" || normalized === "clarify_needed") return "secondary";
   if (normalized === "success") return "default";
   return "outline";
 };

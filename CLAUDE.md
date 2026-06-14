@@ -1,1 +1,1 @@
-@ AGEMTS.md
+@ AGENTS.md

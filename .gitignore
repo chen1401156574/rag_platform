@@ -37,6 +37,7 @@ pnpm-debug.log*
 
 wsl启动rag项目/
 tmp/
+plan/
 
 # =========================
 # 临时测试文件与数据 忽略规则
@@ -45,5 +46,3 @@ tmp/
 *.docx
 *.txt
 backend/nltk_data/
-
-docs/
