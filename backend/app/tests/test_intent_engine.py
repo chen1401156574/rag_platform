@@ -18,6 +18,8 @@ if "colorlog" not in sys.modules:
     sys.modules["colorlog"] = colorlog_stub
 
 chat_stub = types.ModuleType("service.core.chat")
+chat_stub.get_chat_completion = lambda *_, **__: iter(())
+chat_stub.stream_clarify_response = lambda *_, **__: iter(())
 chat_stub.update_session_name = lambda *_, **__: None
 chat_stub.write_chat_to_db = lambda *_, **__: None
 sys.modules["service.core.chat"] = chat_stub

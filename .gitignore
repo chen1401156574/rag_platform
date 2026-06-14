@@ -45,3 +45,5 @@ tmp/
 *.docx
 *.txt
 backend/nltk_data/
+
+docs/

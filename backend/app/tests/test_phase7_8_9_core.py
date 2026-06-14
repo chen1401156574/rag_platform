@@ -138,6 +138,12 @@ class TraceRecordTests(unittest.TestCase):
         self.assertEqual(record["durationMs"], 50)
         self.assertEqual(record["extraData"], '{"score":0.95}')
 
+    def test_conversation_status_priority(self):
+        self.assertEqual(trace_rt._aggregate_status(["success", "clarify_needed"]), "clarify_needed")
+        self.assertEqual(trace_rt._aggregate_status(["success", "running"]), "running")
+        self.assertEqual(trace_rt._aggregate_status(["success", "failed"]), "failed")
+        self.assertEqual(trace_rt._aggregate_status(["success"]), "success")
+
 
 class DashboardHelperTests(unittest.TestCase):
     """Test dashboard utility functions."""
@@ -200,6 +206,8 @@ class RouteAvailabilityTests(unittest.TestCase):
     def test_trace_routes(self):
         paths = [r.path for r in trace_rt.router.routes]
         self.assertIn("/rag/traces/runs", paths)
+        self.assertIn("/rag/traces/conversations", paths)
+        self.assertIn("/rag/traces/conversations/{session_id}", paths)
         self.assertIn("/trace/page", paths)
 
     def test_dashboard_routes(self):

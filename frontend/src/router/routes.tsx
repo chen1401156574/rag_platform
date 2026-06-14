@@ -26,6 +26,7 @@ import { KnowledgeDocumentsPage } from '@/pages/admin/knowledge/KnowledgeDocumen
 import { KnowledgeListPage } from '@/pages/admin/knowledge/KnowledgeListPage'
 import { QueryTermMappingPage } from '@/pages/admin/query-term-mapping/QueryTermMappingPage'
 import { SampleQuestionPage } from '@/pages/admin/sample-questions/SampleQuestionPage'
+import { RagTraceConversationPage } from '@/pages/admin/traces/RagTraceConversationPage'
 import { SystemSettingsPage } from '@/pages/admin/settings/SystemSettingsPage'
 import { RagTraceDetailPage } from '@/pages/admin/traces/RagTraceDetailPage'
 import { RagTracePage } from '@/pages/admin/traces/RagTracePage'
@@ -87,6 +88,12 @@ function LegacyChatRedirect() {
   }, [id, navigate])
 
   return null
+}
+
+function LegacyTraceRedirect() {
+  const { traceId } = useParams()
+  if (!traceId) return <Navigate to="/admin/traces" replace />
+  return <Navigate to={`/admin/traces/runs/${encodeURIComponent(traceId)}`} replace />
 }
 
 function AdminRoute() {
@@ -172,8 +179,16 @@ export const router = createBrowserRouter(
           Component: RagTracePage,
         },
         {
-          path: 'traces/:traceId',
+          path: 'traces/conversations/:sessionId',
+          Component: RagTraceConversationPage,
+        },
+        {
+          path: 'traces/runs/:traceId',
           Component: RagTraceDetailPage,
+        },
+        {
+          path: 'traces/:traceId',
+          Component: LegacyTraceRedirect,
         },
         {
           path: 'users',

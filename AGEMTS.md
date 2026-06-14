@@ -9,7 +9,20 @@
 - 前端：React 18、TypeScript、Vite、Ant Design 5、Tailwind CSS 4、shadcn/ui (Radix UI)、Zustand + Valtio、react-hook-form + zod、Axios。
 - 后端：FastAPI、SQLAlchemy、PostgreSQL 15、Elasticsearch 8.11.3、Redis 7、OpenAI 兼容接口（DashScope）。
 - 文档处理：PDF/DOCX/TXT/Excel/PPT/HTML/Markdown/JSON 等解析能力在 `backend/app/service/core/deepdoc/parser/` 下，PDF 使用 DeepDOC 流程（OCR + 布局分析 + 表格识别）。
-- 大模型：通过 DashScope API（OpenAI 兼容协议）调用，主要模型包括 `deepseek-r1`、`qwen2.5-72b-instruct`、`qwen2.5-7b-instruct`、`text-embedding-v3`（向量嵌入）、`gte-rerank-v2`（重排序）。
+- 大模型：通过 DashScope API（OpenAI 兼容协议）调用，默认聊天/深度思考模型为 `deepseek-v4-pro`，会话标题生成使用 `qwen2.5-72b-instruct`，意图分类、推荐问题、系统/MCP 参数提取默认使用 `qwen2.5-7b-instruct`，向量嵌入使用 `text-embedding-v3`，重排序默认使用 `gte-rerank-v2`。
+
+## 当前最新状态（2026-06-14）
+
+- 最近提交历史显示项目已完成初始化、`deepseek-v4-pro` 接入、核心链路分析文档、追问功能和答案歧义审计功能；当前 `HEAD` 为 `55c17ea 增加答案歧义审计功能`。
+- 当前工作区存在未提交改动，集中在 Trace 可观测性和默认 RAG Prompt：`backend/app/router/trace_rt.py`、`backend/app/service/settings_service.py`、`frontend/src/admin.css`、`frontend/src/pages/admin/traces/RagTraceDetailPage.tsx`、`frontend/src/pages/admin/traces/components/RunsTable.tsx`、`frontend/src/services/ragTraceService.ts`。
+- Trace 列表接口现在会从 `IntentClassify` 节点批量提取 `intentCode`、`intentName`、`intentScore`，并补充 `sessionId` 字段；Trace 节点返回值也暴露 `inputJson` 和 `outputJson`，便于前端展示原始算子输入输出。
+- 管理端 Trace 列表新增“意图分类”列，详情页会解析 `IntentClassify.outputJson` 并展示意图命中状态、意图编码、类型和置信度，同时支持复制 Session Id。
+- 默认 RAG Prompt 已加强“检索内容相关性判断”：当召回内容只部分相关或完全不相关时，需要明确告知用户，不再把局部材料包装成完整答案。
+- 聊天链路当前实际执行顺序为：鉴权与加载设置 -> 意图分类 -> 向量检索 -> 追问澄清合并/歧义审计 -> 合并临时文档 -> LLM 流式生成 -> 推荐问题 -> 消息与会话入库。Trace 节点主要包括 `IntentClassify`、`VectorRetrieve`、`LLMCall`，歧义命中时 run 状态会标记为 `clarify_needed`。
+- `IntentRouter.decide()` 目前仍统一返回 `INTENT_KIND_KB` 并走知识库检索；`INTENT_KIND_SYSTEM`、`INTENT_KIND_MCP` 及其流式响应工具函数已经存在于 `intent_engine.py`，但尚未接入 `chat_rt.py` 主链路。
+- `init.sql` 当前定义 16 张表，包含前台用户/会话/消息/知识库、临时文档上传、后台意图树、系统配置、管理端知识库/文档/入库任务、RAG Trace run/node 等。
+- 前端 TypeScript 配置启用了 `strict`、`noUnusedLocals`、`noUnusedParameters`；当前未提交改动中 `RagTraceDetailPage.tsx` 存在未使用的 `Crosshair` import，运行 `npm run build` 前需要处理。
+- 安全关注：后端 `.env` 不应写入文档或提交；另外代码中存在疑似硬编码默认 API Key 的历史路径，清理时不要在文档、日志或提交记录中泄露具体值。
 
 ## 目录结构
 
@@ -37,7 +50,7 @@
 
 - `backend/`：后端服务与 Docker Compose 编排目录。
   - `docker-compose.yml`：编排 swxy_api、es01、gsk_pg、redis、init_intents 服务。
-  - `init.sql`：数据库初始化 DDL（14 张表）。
+  - `init.sql`：数据库初始化 DDL（16 张表）。
   - `app/app_main.py`：FastAPI 入口，注册前台与后台管理子路由，包含 `/api/ragent` 统一前缀兼容。
   - `app/router/`：HTTP API 路由。
     - `chat_rt.py`：聊天问答、知识库上传、快速解析、追问流程接口。
@@ -146,8 +159,8 @@ Docker Compose 默认服务：
 - `GET /api/ragent/knowledge-base/{kb_id}/docs`：知识库下文档列表与状态。
 - `GET /api/ragent/knowledge-base/docs/{doc_id}/chunks`：文档 ES Chunk 分块详情。
 - `DELETE /api/ragent/knowledge-base/docs/{doc_id}`：物理删除文档。
-- `GET /api/ragent/rag/traces/runs`：分页获取 Trace 运行历史。
-- `GET /api/ragent/rag/traces/runs/{trace_id}`：单次 Trace 的节点耗时与 JSON 输入输出。
+- `GET /api/ragent/rag/traces/runs`：分页获取 Trace 运行历史，当前会回填 Session Id 与意图分类字段（`intentCode` / `intentName` / `intentScore`）。
+- `GET /api/ragent/rag/traces/runs/{trace_id}`：单次 Trace 的节点耗时与 JSON 输入输出，节点返回包含 `inputJson` / `outputJson` / `extraData`。
 
 ## 数据流
 
@@ -205,8 +218,8 @@ Docker Compose 默认服务：
 | `t_ingestion_task` | 入库任务表（状态、错误信息、chunk 数量） |
 | `t_ingestion_task_node` | 入库任务节点执行记录表 |
 | `t_knowledge_document_chunk_log` | 文档切块日志表（各阶段耗时统计） |
-| `t_rag_trace_run` | RAG 链路 Trace 运行表（trace_id、状态、TTFT、耗时） |
-| `t_rag_trace_node` | RAG 链路 Trace 节点表（节点类型、输入输出 JSON、耗时） |
+| `t_rag_trace_run` | RAG 链路 Trace 运行表（trace_id、会话 ID、状态、TTFT、耗时） |
+| `t_rag_trace_node` | RAG 链路 Trace 节点表（节点类型、输入/输出 JSON、额外数据 JSON、耗时） |
 
 > [!NOTE]
 > `init.sql` 与 Alembic 迁移同时存在。修改表结构时须同步更新 Alembic 迁移脚本和 `init.sql`，确保全新容器部署时表结构对齐。
@@ -250,10 +263,6 @@ npm run lint
 npm run build
 ```
 
-## 核心文档
-
-- [链路分析.md](./链路分析.md)：RAG 平台文档解析与问答全链路技术分析。
-- [问答链路流程图.md](./问答链路流程图.md)：Mermaid 流程图形式的问答链路详解，含歧义检测与追问机制。
 
 ## 待优化项
 

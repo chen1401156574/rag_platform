@@ -99,9 +99,41 @@ export const nodeTypeChipClass = (type?: string | null): string => {
   if (normalized === "LLM_PROVIDER") return "bg-orange-100 text-orange-700";
   if (normalized === "LLM_ROUTING") return "bg-amber-100 text-amber-700";
   if (normalized === "GUIDANCE") return "bg-violet-100 text-violet-700";
-  if (normalized === "INTENT") return "bg-sky-100 text-sky-700";
+  if (normalized === "INTENT" || normalized === "INTENTCLASSIFY") return "bg-sky-100 text-sky-700";
   if (normalized === "REWRITE") return "bg-teal-100 text-teal-700";
-  if (normalized === "RETRIEVE" || normalized === "RAG_NODE") return "bg-blue-100 text-blue-700";
+  if (
+      normalized === "RETRIEVE" ||
+      normalized === "RAG_NODE" ||
+      normalized === "VECTORRETRIEVE" ||
+      normalized === "RETRIEVALQUERYBUILD" ||
+      normalized === "ESHYBRIDSEARCH" ||
+      normalized === "RERANKCHUNKS"
+  ) return "bg-blue-100 text-blue-700";
+  if (
+      normalized === "USERQUESTIONRECEIVED" ||
+      normalized === "AUTHLOADSETTINGS" ||
+      normalized === "CLARIFICATIONMERGE" ||
+      normalized === "AMBIGUITYAUDIT" ||
+      normalized === "CLARIFYRESPONSE" ||
+      normalized === "QUICKPARSELOAD" ||
+      normalized === "CONTEXTASSEMBLE"
+  ) return "bg-violet-100 text-violet-700";
+  if (
+      normalized === "PROMPTBUILD" ||
+      normalized === "LLMSTREAMSTART" ||
+      normalized === "LLMFIRSTTOKEN" ||
+      normalized === "LLMANSWERSTREAM" ||
+      normalized === "LLMFINALANSWER" ||
+      normalized === "RECOMMENDQUESTIONS" ||
+      normalized === "LLMCALL"
+  ) return "bg-emerald-100 text-emerald-700";
+  if (
+      normalized === "SSEDOCUMENTSSENT" ||
+      normalized === "SSEENDSENT" ||
+      normalized === "SSEERRORSENT" ||
+      normalized === "PERSISTMESSAGE" ||
+      normalized === "SESSIONTITLEUPDATE"
+  ) return "bg-stone-100 text-stone-700";
   if (normalized === "TITLE_GEN") return "bg-stone-100 text-stone-700";
   if (normalized.startsWith("MCP")) return "bg-cyan-100 text-cyan-700";
   return "bg-slate-100 text-slate-600";
@@ -128,7 +160,32 @@ const NODE_NAME_DISPLAY: Record<string, string> = {
   "context-build": "上下文组装",
   "prompt-render": "Prompt 渲染",
   "conversation-title-gen": "会话标题生成",
-  "llm-stream-routing": "LLM 流式路由"
+  "llm-stream-routing": "LLM 流式路由",
+  "User Question Received": "用户问题接收",
+  "Auth And Settings": "鉴权与配置",
+  "Retrieval Query Build": "检索查询构建",
+  "ES Hybrid Search": "ES 混合检索",
+  "Rerank Chunks": "检索结果重排",
+  "Vector Retrieval": "向量检索",
+  "Vector Retrieval After Clarification": "追问后二次检索",
+  "Clarification Merge": "追问信息合并",
+  "Ambiguity Audit": "歧义审计",
+  "Ambiguity Audit Skipped": "跳过歧义审计",
+  "Clarify SSE Response": "追问响应",
+  "Quick Parse Load": "快速解析读取",
+  "Context Assemble": "上下文组装",
+  "Prompt Build": "Prompt 构建",
+  "LLM Stream Start": "LLM 流式开始",
+  "LLM First Token": "LLM 首包",
+  "LLM Answer Stream": "LLM 回答流",
+  "LLM Final Answer": "模型最终回答",
+  "Recommend Questions": "推荐问题",
+  "SSE Documents Sent": "SSE 引用发送",
+  "SSE End Sent": "SSE 结束",
+  "SSE Error Sent": "SSE 错误",
+  "Persist Message": "消息落库",
+  "Session Title Update": "会话标题更新",
+  "Large Language Model Call": "LLM 调用"
 };
 
 const toTitleCase = (raw: string): string =>

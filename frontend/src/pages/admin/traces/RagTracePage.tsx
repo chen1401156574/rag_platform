@@ -1,18 +1,28 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { Activity, Clock3, RefreshCw, Search, TrendingUp } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Activity, Clock3, MessageSquare, RefreshCw, Route } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { getRagTraceRuns, type PageResult, type RagTraceRun } from "@/services/ragTraceService";
-import { getErrorMessage } from "@/utils/error";
-import { RunsTable } from "@/pages/admin/traces/components/RunsTable";
+import { ConversationFilterBar } from "@/pages/admin/traces/components/ConversationFilterBar";
+import { ConversationTable } from "@/pages/admin/traces/components/ConversationTable";
 import { StatCard, type StatCardTone } from "@/pages/admin/traces/components/StatCard";
 import {
-  PAGE_SIZE,
-  normalizeStatus,
-} from "@/pages/admin/traces/traceUtils";
+  buildConversationQuery,
+  CONVERSATION_PAGE_SIZE,
+  conversationFiltersToSearch,
+  createDefaultConversationFilters,
+  loadStoredConversationFilters,
+  parseConversationFiltersFromSearch,
+  saveConversationFilters,
+  type TraceConversationFilters
+} from "@/pages/admin/traces/traceConversationFilterUtils";
+import { formatDuration, normalizeStatus } from "@/pages/admin/traces/traceUtils";
+import {
+  getRagTraceConversations,
+  type PageResult,
+  type RagTraceConversation
+} from "@/services/ragTraceService";
+import { getErrorMessage } from "@/utils/error";
 
 type DurationMetric = {
   value: string;
@@ -21,129 +31,167 @@ type DurationMetric = {
 
 const formatDurationMetric = (durationMs: number): DurationMetric => {
   const duration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 0;
-  if (duration < 1000) {
-    return { value: `${Math.round(duration)}`, unit: "ms" };
-  }
-  if (duration < 60_000) {
-    return { value: (duration / 1000).toFixed(2), unit: "s" };
-  }
+  if (duration < 1000) return { value: `${Math.round(duration)}`, unit: "ms" };
+  if (duration < 60_000) return { value: (duration / 1000).toFixed(2), unit: "s" };
   return { value: (duration / 1000).toFixed(1), unit: "s" };
 };
 
+const resolveInitialState = (search: string) => {
+  if (search && search !== "?") return parseConversationFiltersFromSearch(search);
+  const stored = loadStoredConversationFilters();
+  return {
+    filters: stored || createDefaultConversationFilters(),
+    page: 1
+  };
+};
+
 export function RagTracePage() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const runsRequestRef = useRef(0);
-  const [traceIdFilter, setTraceIdFilter] = useState("");
-  const [queryTraceId, setQueryTraceId] = useState("");
-  const [pageNo, setPageNo] = useState(1);
-  const [pageData, setPageData] = useState<PageResult<RagTraceRun> | null>(null);
+  const requestRef = useRef(0);
+  const initialState = useMemo(() => resolveInitialState(location.search), []);
+
+  const [draftFilters, setDraftFilters] = useState<TraceConversationFilters>(initialState.filters);
+  const [appliedFilters, setAppliedFilters] = useState<TraceConversationFilters>(initialState.filters);
+  const [pageNo, setPageNo] = useState(initialState.page);
+  const [pageData, setPageData] = useState<PageResult<RagTraceConversation> | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const runs = pageData?.records || [];
+  const conversations = pageData?.records || [];
 
-  const loadRuns = async (current = pageNo, nextTraceId = queryTraceId) => {
-    const requestId = ++runsRequestRef.current;
+  const syncUrl = (filters: TraceConversationFilters, current: number) => {
+    const query = conversationFiltersToSearch(filters, current);
+    navigate(`/admin/traces?${query}`, { replace: true });
+  };
+
+  const loadConversations = async (
+    current = pageNo,
+    filters = appliedFilters,
+    sync = false
+  ) => {
+    const requestId = ++requestRef.current;
     setLoading(true);
     try {
-      const result = await getRagTraceRuns({
-        current,
-        size: PAGE_SIZE,
-        traceId: nextTraceId.trim() || undefined
-      });
-      if (runsRequestRef.current !== requestId) return;
+      const result = await getRagTraceConversations(
+        buildConversationQuery(filters, current, CONVERSATION_PAGE_SIZE)
+      );
+      if (requestRef.current !== requestId) return;
+      if (result.pages > 0 && current > result.pages) {
+        setPageNo(result.pages);
+        syncUrl(filters, result.pages);
+        return;
+      }
       setPageData(result);
+      if (sync) syncUrl(filters, current);
     } catch (error) {
-      if (runsRequestRef.current !== requestId) return;
-      toast.error(getErrorMessage(error, "加载链路运行列表失败"));
+      if (requestRef.current !== requestId) return;
+      toast.error(getErrorMessage(error, "加载会话链路列表失败"));
       console.error(error);
     } finally {
-      if (runsRequestRef.current !== requestId) return;
+      if (requestRef.current !== requestId) return;
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadRuns();
-  }, [pageNo, queryTraceId]);
+    loadConversations(pageNo, appliedFilters);
+  }, [pageNo, appliedFilters]);
 
   const handleSearch = () => {
     setPageNo(1);
-    setQueryTraceId(traceIdFilter.trim());
+    setAppliedFilters(draftFilters);
+    saveConversationFilters(draftFilters);
+    syncUrl(draftFilters, 1);
   };
 
   const handleRefresh = () => {
-    loadRuns(pageNo, queryTraceId);
+    loadConversations(pageNo, appliedFilters, true);
   };
 
-  const traceStats = useMemo(() => {
-    const durations = runs
-      .map((item) => Number(item.durationMs ?? 0))
+  const handleReset = () => {
+    const defaults = createDefaultConversationFilters();
+    setDraftFilters(defaults);
+    setAppliedFilters(defaults);
+    setPageNo(1);
+    saveConversationFilters(defaults);
+    syncUrl(defaults, 1);
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    const current = Math.max(1, nextPage);
+    setPageNo(current);
+    syncUrl(appliedFilters, current);
+  };
+
+  const stats = useMemo(() => {
+    const failedCount = conversations.filter((item) => normalizeStatus(item.status) === "failed").length;
+    const turnCount = conversations.reduce((sum, item) => sum + Number(item.turnCount || 0), 0);
+    const durations = conversations
+      .map((item) => Number(item.avgDurationMs ?? 0))
       .filter((value) => Number.isFinite(value) && value > 0);
-    const ttftValues = runs
-      .map((item) => Number(item.ttftMs ?? 0))
+    const ttfts = conversations
+      .map((item) => Number(item.avgTtftMs ?? 0))
       .filter((value) => Number.isFinite(value) && value > 0);
-    const successCount = runs.filter((item) => normalizeStatus(item.status) === "success").length;
-    const failedCount = runs.filter((item) => normalizeStatus(item.status) === "failed").length;
-    const runningCount = runs.filter((item) => normalizeStatus(item.status) === "running").length;
     const avgDuration = durations.length
       ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
       : 0;
-    const avgTtft = ttftValues.length
-      ? Math.round(ttftValues.reduce((sum, value) => sum + value, 0) / ttftValues.length)
+    const avgTtft = ttfts.length
+      ? Math.round(ttfts.reduce((sum, value) => sum + value, 0) / ttfts.length)
       : 0;
-    const successRate = runs.length ? Math.round((successCount / runs.length) * 1000) / 10 : 0;
     return {
-      totalRuns: pageData?.total ?? runs.length,
-      successCount,
+      conversationTotal: pageData?.total ?? 0,
+      currentTurnCount: turnCount,
       failedCount,
-      runningCount,
       avgDuration,
-      avgTtft,
-      successRate
+      avgTtft
     };
-  }, [runs, pageData?.total]);
+  }, [conversations, pageData?.total]);
 
-  const current = pageData?.current || pageNo;
-  const pages = pageData?.pages || 1;
-  const total = pageData?.total || 0;
-  const avgDurationMetric = formatDurationMetric(traceStats.avgDuration);
-  const avgTtftMetric = formatDurationMetric(traceStats.avgTtft);
-  const statCards: {
+  const avgDurationMetric = formatDurationMetric(stats.avgDuration);
+  const avgTtftMetric = formatDurationMetric(stats.avgTtft);
+  const statCards: Array<{
     key: string;
     title: string;
     value: string;
     unit?: string;
     icon: ReactNode;
     tone: StatCardTone;
-  }[] = [
+  }> = [
     {
-      key: "status",
-      title: "成功 / 失败 / 运行中",
-      value: `${traceStats.successCount} / ${traceStats.failedCount} / ${traceStats.runningCount}`,
-      icon: <Activity className="h-4 w-4" />,
-      tone: "emerald"
-    },
-    {
-      key: "successRate",
-      title: "成功率",
-      value: `${traceStats.successRate}%`,
-      icon: <TrendingUp className="h-4 w-4" />,
-      tone: "cyan"
-    },
-    {
-      key: "avg",
-      title: "平均耗时",
-      value: avgDurationMetric.value,
-      unit: avgDurationMetric.unit,
-      icon: <Clock3 className="h-4 w-4" />,
+      key: "conversations",
+      title: "会话数",
+      value: String(stats.conversationTotal),
+      icon: <MessageSquare className="h-4 w-4" />,
       tone: "indigo"
     },
     {
-      key: "avgTtft",
-      title: "平均首字",
+      key: "turns",
+      title: "当前页轮次",
+      value: String(stats.currentTurnCount),
+      icon: <Route className="h-4 w-4" />,
+      tone: "cyan"
+    },
+    {
+      key: "failed",
+      title: "当前页失败会话",
+      value: String(stats.failedCount),
+      icon: <Activity className="h-4 w-4" />,
+      tone: "rose"
+    },
+    {
+      key: "avg",
+      title: `平均耗时 ${formatDuration(stats.avgDuration)}`,
+      value: avgDurationMetric.value,
+      unit: avgDurationMetric.unit,
+      icon: <Clock3 className="h-4 w-4" />,
+      tone: "emerald"
+    },
+    {
+      key: "ttft",
+      title: `平均首字 ${formatDuration(stats.avgTtft)}`,
       value: avgTtftMetric.value,
       unit: avgTtftMetric.unit,
-      icon: <Clock3 className="h-4 w-4" />,
+      icon: <RefreshCw className="h-4 w-4" />,
       tone: "sky"
     }
   ];
@@ -155,31 +203,26 @@ export function RagTracePage() {
           <div>
             <h1 className="admin-page-title">链路追踪</h1>
             <p className="admin-page-subtitle">
-              独立列表页聚焦运行检索，点击任意运行记录进入详情页分析慢节点与失败节点
+              按会话聚合查看每个对话的多轮问答链路，再下钻到单轮 Trace 分析端到端时间线。
             </p>
-          </div>
-          <div className="admin-page-actions">
-            <Input
-              value={traceIdFilter}
-              onChange={(event) => setTraceIdFilter(event.target.value)}
-              placeholder="搜索 Trace Id"
-              className="w-[300px]"
-            />
-            <Button className="admin-primary-gradient" onClick={handleSearch}>
-              <Search className="h-4 w-4 mr-2" />
-              查询
-            </Button>
-            <Button variant="outline" onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              刷新
-            </Button>
           </div>
         </div>
 
+        <ConversationFilterBar
+          filters={draftFilters}
+          loading={loading}
+          onChange={setDraftFilters}
+          onSearch={handleSearch}
+          onReset={handleReset}
+          onRefresh={handleRefresh}
+        />
+
         <section className="trace-list-stat-section">
           <div className="trace-list-stat-caption">
-            <span className="trace-list-stat-caption-label">当前页统计</span>
-            <span className="trace-list-stat-caption-hint">仅反映本页 {runs.length} 条记录</span>
+            <span className="trace-list-stat-caption-label">会话聚合统计</span>
+            <span className="trace-list-stat-caption-hint">
+              当前筛选返回 {stats.conversationTotal.toLocaleString("zh-CN")} 个会话
+            </span>
           </div>
           <div className="trace-list-stat-grid">
             {statCards.map((stat) => (
@@ -195,15 +238,18 @@ export function RagTracePage() {
           </div>
         </section>
 
-        <RunsTable
-          runs={runs}
+        <ConversationTable
+          conversations={conversations}
           loading={loading}
-          current={current}
-          pages={pages}
-          total={total}
-          onOpenRun={(traceId) => navigate(`/admin/traces/${encodeURIComponent(traceId)}`)}
-          onPrevPage={() => setPageNo((prev) => Math.max(1, prev - 1))}
-          onNextPage={() => setPageNo((prev) => prev + 1)}
+          current={pageData?.current || pageNo}
+          pages={pageData?.pages || 1}
+          total={pageData?.total || 0}
+          onOpenConversation={(sessionId) =>
+            navigate(`/admin/traces/conversations/${encodeURIComponent(sessionId)}`)
+          }
+          onOpenRun={(traceId) => navigate(`/admin/traces/runs/${encodeURIComponent(traceId)}`)}
+          onPrevPage={() => handlePageChange(pageNo - 1)}
+          onNextPage={() => handlePageChange(pageNo + 1)}
         />
       </div>
     </div>

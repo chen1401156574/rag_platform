@@ -1346,6 +1346,43 @@ select:focus:not(:focus-visible),
     min-width: 160px;
   }
 
+  .admin-layout .trace-list-table .trace-col-intent {
+    width: 150px;
+    min-width: 150px;
+    max-width: 150px;
+  }
+
+  .trace-list-intent-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .trace-list-intent-name {
+    font-size: var(--trace-font-xs);
+    font-weight: 500;
+    color: var(--trace-c-slate-700);
+    line-height: var(--trace-lh-base);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .trace-list-intent-score {
+    font-size: 10px;
+    font-family: monospace;
+    color: var(--trace-c-slate-500);
+  }
+
+  .trace-list-intent-code {
+    font-size: var(--trace-font-xs);
+    font-family: monospace;
+    color: var(--trace-c-slate-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .admin-layout .trace-list-table .trace-col-trace-id {
     width: 210px;
     min-width: 210px;

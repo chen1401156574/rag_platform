@@ -68,6 +68,7 @@ def _install_stubs():
 
     chat_stub = sys.modules.get("service.core.chat") or types.ModuleType("service.core.chat")
     chat_stub.get_chat_completion = getattr(chat_stub, "get_chat_completion", lambda *_, **__: iter(()))
+    chat_stub.stream_clarify_response = getattr(chat_stub, "stream_clarify_response", lambda *_, **__: iter(()))
     chat_stub.update_session_name = getattr(chat_stub, "update_session_name", lambda *_, **__: None)
     chat_stub.write_chat_to_db = getattr(chat_stub, "write_chat_to_db", lambda *_, **__: None)
     sys.modules["service.core.chat"] = chat_stub
@@ -80,6 +81,29 @@ def _install_stubs():
     ):
         if mod_name not in sys.modules:
             sys.modules[mod_name] = types.ModuleType(mod_name)
+    kb_ops_stub = sys.modules["database.knowledgebase_operations"]
+    kb_ops_stub.insert_knowledgebase = getattr(kb_ops_stub, "insert_knowledgebase", lambda *_, **__: None)
+    kb_ops_stub.verify_user_knowledgebase = getattr(kb_ops_stub, "verify_user_knowledgebase", lambda *_, **__: True)
+
+    quick_parse_stub = sys.modules["service.quick_parse_service"]
+    if not hasattr(quick_parse_stub, "quick_parse_service"):
+        quick_parse_stub.quick_parse_service = SimpleNamespace(
+            quick_parse_document=lambda *_, **__: {},
+            get_parsed_content=lambda *_, **__: {},
+        )
+
+    doc_upload_stub = sys.modules["service.document_upload_service"]
+    if not hasattr(doc_upload_stub, "DocumentUploadService"):
+        class DocumentUploadService:
+            create_upload_record = staticmethod(lambda *_, **__: None)
+            get_session_documents = staticmethod(lambda *_, **__: [])
+            has_uploaded_documents = staticmethod(lambda *_, **__: False)
+            get_latest_document = staticmethod(lambda *_, **__: None)
+
+        doc_upload_stub.DocumentUploadService = DocumentUploadService
+
+    doc_ops_stub = sys.modules["service.document_operations"]
+    doc_ops_stub.delete_document = getattr(doc_ops_stub, "delete_document", lambda *_, **__: None)
 
     if "openai" not in sys.modules:
         openai_stub = types.ModuleType("openai")

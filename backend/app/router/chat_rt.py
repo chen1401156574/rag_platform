@@ -69,11 +69,23 @@ def _stream_chat_response(
         trace_name=trace_name,
         entry_method=entry_method,
     )
+    tracker.record_event(
+        node_type="UserQuestionReceived",
+        node_name="User Question Received",
+        input_data={
+            "session_id": session_id,
+            "entry_method": entry_method,
+            "question": question,
+            "has_clarifications": bool(clarifications and original_question),
+        },
+        output_data={"trace_id": tracker.trace_id},
+    )
 
     logger.info(
         f"Start chat request: user_id={user_id}, session_id={session_id}, entry_method={entry_method}"
     )
     logger.info(f"Question: {question}")
+    settings_start = datetime.now()
     settings = load_settings(db)
     if deep_thinking:
         deep_model = settings.get("ai", {}).get("chat", {}).get("deepThinkingModel")
@@ -81,6 +93,21 @@ def _stream_chat_response(
             settings = copy.deepcopy(settings)
             settings.setdefault("ai", {}).setdefault("chat", {})["defaultModel"] = deep_model
     top_k = get_retrieval_top_k(settings)
+    settings_end = datetime.now()
+    tracker.record_node(
+        node_type="AuthLoadSettings",
+        node_name="Auth And Settings",
+        start_time=settings_start,
+        end_time=settings_end,
+        status="success",
+        input_data={"user_id": user_id, "session_id": session_id, "deep_thinking": deep_thinking},
+        output_data={
+            "top_k": top_k,
+            "default_model": settings.get("ai", {}).get("chat", {}).get("defaultModel"),
+            "deep_thinking_model": settings.get("ai", {}).get("chat", {}).get("deepThinkingModel"),
+            "temperature": settings.get("rag", {}).get("generation", {}).get("temperature"),
+        },
+    )
 
     intent_start = datetime.now()
     decision = intent_router.decide(db, question, user_id)
@@ -121,6 +148,7 @@ def _stream_chat_response(
             question,
             top_k=top_k,
             kb_ids=None,
+            tracker=tracker,
         )
         logger.info(f"Retrieved {len(references)} related references")
         retrieval_end = datetime.now()
@@ -151,10 +179,25 @@ def _stream_chat_response(
     # 处理追问澄清：若用户已回答追问，合并后重新检索
     effective_question = question
     if clarifications and original_question:
+        merge_start = datetime.now()
         effective_question = merge_clarifications(original_question, clarifications)
+        merge_end = datetime.now()
+        tracker.record_node(
+            node_type="ClarificationMerge",
+            node_name="Clarification Merge",
+            start_time=merge_start,
+            end_time=merge_end,
+            status="success",
+            input_data={
+                "original_question": original_question,
+                "clarifications": clarifications,
+            },
+            output_data={"effective_question": effective_question},
+        )
         logger.info(f"追问澄清合并完成，原始提问: {original_question}")
         logger.info(f"补充说明: {clarifications}")
         # 用合并后的问题重新检索
+        clarify_retrieval_start = datetime.now()
         try:
             logger.info("使用合并后的问题重新检索")
             references = retrieve_content(
@@ -162,21 +205,88 @@ def _stream_chat_response(
                 effective_question,
                 top_k=top_k,
                 kb_ids=None,
+                tracker=tracker,
             )
             logger.info(f"重新检索获得 {len(references)} 条参考内容")
+            clarify_retrieval_end = datetime.now()
+            tracker.record_node(
+                node_type="VectorRetrieve",
+                node_name="Vector Retrieval After Clarification",
+                start_time=clarify_retrieval_start,
+                end_time=clarify_retrieval_end,
+                status="success",
+                input_data={"question": effective_question, "top_k": top_k, "source": "clarification_merge"},
+                output_data={"references_count": len(references), "references": references},
+                node_id="VectorRetrieveClarified",
+            )
         except Exception as e:
             logger.warning(f"重新检索失败: {str(e)}")
+            clarify_retrieval_end = datetime.now()
+            tracker.record_node(
+                node_type="VectorRetrieve",
+                node_name="Vector Retrieval After Clarification",
+                start_time=clarify_retrieval_start,
+                end_time=clarify_retrieval_end,
+                status="failed",
+                error_message=str(e),
+                input_data={"question": effective_question, "top_k": top_k, "source": "clarification_merge"},
+                node_id="VectorRetrieveClarified",
+            )
 
     # 歧义检测：生成草稿回答并自查不确定性
     if not clarifications and references:
+        ambiguity_start = datetime.now()
         clarifying_questions = check_draft_and_clarify(question, references, settings)
+        ambiguity_end = datetime.now()
+        tracker.record_node(
+            node_type="AmbiguityAudit",
+            node_name="Ambiguity Audit",
+            start_time=ambiguity_start,
+            end_time=ambiguity_end,
+            status="success",
+            input_data={"question": question, "references_count": len(references)},
+            output_data={
+                "need_clarify": bool(clarifying_questions),
+                "clarifying_questions": clarifying_questions or [],
+                "clarifying_question_count": len(clarifying_questions or []),
+            },
+        )
         if clarifying_questions:
             logger.info(f"检测到歧义，生成 {len(clarifying_questions)} 个追问")
+            tracker.record_event(
+                node_type="ClarifyResponse",
+                node_name="Clarify SSE Response",
+                output_data={
+                    "original_question": question,
+                    "clarifying_questions": clarifying_questions,
+                    "will_send_end": True,
+                },
+            )
+            tracker.record_event(
+                node_type="SSEEndSent",
+                node_name="SSE End Sent",
+                output_data={"data": "[DONE]", "end_type": "clarify_needed"},
+            )
             tracker.finish_run(status="clarify_needed")
             return StreamingResponse(
                 stream_clarify_response(question, clarifying_questions),
                 media_type="text/event-stream",
             )
+    elif clarifications:
+        tracker.record_event(
+            node_type="AmbiguityAudit",
+            node_name="Ambiguity Audit Skipped",
+            status="skipped",
+            input_data={"reason": "clarification_answer_turn"},
+            output_data={"effective_question": effective_question},
+        )
+    else:
+        tracker.record_event(
+            node_type="AmbiguityAudit",
+            node_name="Ambiguity Audit Skipped",
+            status="skipped",
+            input_data={"reason": "no_references"},
+        )
 
     logger.info("Start generating answer")
     return StreamingResponse(

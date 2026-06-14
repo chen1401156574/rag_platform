@@ -2,6 +2,8 @@ from openai import OpenAI
 import os
 import json
 import redis
+import re
+from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from utils.database import get_db
@@ -11,6 +13,17 @@ from utils import logger
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _summary_text(text: str, limit: int = 600) -> str:
+    text = text or ""
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"...(已截断，原长度 {len(text)})"
+
+
+def _citation_count(text: str) -> int:
+    return len(re.findall(r"##\d+\$\$", text or ""))
 
 
 def render_prompt_template(template: str, question: str, formatted_references: str) -> str:
@@ -305,216 +318,413 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
     :param settings: 系统设置快照
     :return: 流式输出的生成器，每个元素为符合 SSE 格式的字符串
     """
-    # 获取快速解析的文档内容
+    quick_start = datetime.now()
     quick_parse_content = get_quick_parse_content(session_id)
-    
-    # 构建参考内容
+    quick_end = datetime.now()
+    if tracker:
+        tracker.record_node(
+            node_type="QuickParseLoad",
+            node_name="Quick Parse Load",
+            start_time=quick_start,
+            end_time=quick_end,
+            status="success",
+            input_data={"session_id": session_id},
+            output_data={
+                "hit": bool(quick_parse_content),
+                "content_length": len(quick_parse_content or ""),
+            },
+        )
+
     reference_parts = []
     reference_id = 1
-    
-    # 1. 添加知识库检索内容
+    knowledge_reference_count = 0
+    quick_reference_count = 0
+
     if retrieved_content:
         knowledge_base_refs = []
         for ref in retrieved_content:
             knowledge_base_refs.append(f"##{reference_id}$$ {ref['content_with_weight']}")
             reference_id += 1
+            knowledge_reference_count += 1
         if knowledge_base_refs:
             reference_parts.append("**知识库内容：**\n" + "\n".join(knowledge_base_refs))
-    
-    # 2. 添加快速解析文档内容
+
     if quick_parse_content:
-        # 将快速解析内容按段落分割，避免内容过长
         quick_content_paragraphs = [para.strip() for para in quick_parse_content.split('\n') if para.strip()]
         if quick_content_paragraphs:
-            # 限制快速解析内容的长度，避免提示词过长
             max_quick_content_length = 4000
             truncated_content = quick_parse_content[:max_quick_content_length]
             if len(quick_parse_content) > max_quick_content_length:
                 truncated_content += "...(内容已截断)"
             reference_parts.append(f"**当前会话文档内容：**\n##{reference_id}$$ {truncated_content}")
             reference_id += 1
-    
-    # 组合所有参考内容
-    if reference_parts:
-        formatted_references = "\n\n".join(reference_parts)
-    else:
-        formatted_references = "暂无相关参考内容"
-    
+            quick_reference_count = 1
+
+    formatted_references = "\n\n".join(reference_parts) if reference_parts else "暂无相关参考内容"
+    if tracker:
+        tracker.record_event(
+            node_type="ContextAssemble",
+            node_name="Context Assemble",
+            input_data={
+                "question": question,
+                "retrieved_count": len(retrieved_content or []),
+                "quick_parse_hit": bool(quick_parse_content),
+            },
+            output_data={
+                "knowledge_reference_count": knowledge_reference_count,
+                "quick_reference_count": quick_reference_count,
+                "total_reference_count": knowledge_reference_count + quick_reference_count,
+                "formatted_reference_length": len(formatted_references),
+            },
+        )
+
     prompt_template = get_prompt_template(settings or {})
     prompt = render_prompt_template(prompt_template, question, formatted_references)
+    if tracker:
+        tracker.record_event(
+            node_type="PromptBuild",
+            node_name="Prompt Build",
+            input_data={
+                "question": question,
+                "template_has_references": "{references}" in prompt_template or "{formatted_references}" in prompt_template,
+                "template_has_question": "{question}" in prompt_template,
+            },
+            output_data={
+                "prompt_length": len(prompt),
+                "prompt_summary": _summary_text(prompt, 1200),
+                "reference_range": f"1-{max(reference_id - 1, 0)}" if reference_id > 1 else "none",
+            },
+        )
 
     print(prompt)
 
-    try:
-        from datetime import datetime
-        llm_start_time = datetime.now()
-        ttft_recorded = False
-        ttft_time = None
+    llm_start_time = datetime.now()
+    ttft_recorded = False
+    ttft_time = None
+    model_answer = ""
+    think = ""
+    recommended_questions = []
+    stream_chunk_count = 0
+    answer_chunk_count = 0
+    thinking_chunk_count = 0
+    model_name = get_chat_model(settings or {})
+    temperature = get_generation_temperature(settings or {})
 
-        # 初始化 OpenAI 客户端
+    try:
         client = OpenAI(
             api_key=os.getenv("DASHSCOPE_API_KEY"),
             base_url=os.getenv("DASHSCOPE_BASE_URL")
         )
 
-        # 创建聊天完成请求
         completion = client.chat.completions.create(
-            model=get_chat_model(settings or {}),  # 可按需更换模型名称
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
             stream=True,
-            temperature=get_generation_temperature(settings or {}),
+            temperature=temperature,
         )
+        llm_request_end = datetime.now()
+        if tracker:
+            tracker.record_node(
+                node_type="LLMStreamStart",
+                node_name="LLM Stream Start",
+                start_time=llm_start_time,
+                end_time=llm_request_end,
+                status="success",
+                input_data={"model": model_name, "temperature": temperature, "stream": True},
+                output_data={"provider": "dashscope-openai-compatible"},
+            )
 
-        # 返回检索内容和快速解析内容
         all_documents = retrieved_content.copy() if retrieved_content else []
-        
-        # 如果有快速解析内容，将其格式化后添加到文档列表中
+        quick_content_chunks = []
         if quick_parse_content:
-            # 将快速解析内容分段，避免单个文档过长
             max_chunk_length = 2000
-            content_chunks = []
-            
             if len(quick_parse_content) <= max_chunk_length:
-                content_chunks = [quick_parse_content]
+                quick_content_chunks = [quick_parse_content]
             else:
-                # 按段落分割内容
                 paragraphs = [p.strip() for p in quick_parse_content.split('\n') if p.strip()]
                 current_chunk = ""
-                
                 for paragraph in paragraphs:
                     if len(current_chunk + paragraph) <= max_chunk_length:
                         current_chunk += paragraph + "\n"
                     else:
                         if current_chunk:
-                            content_chunks.append(current_chunk.strip())
+                            quick_content_chunks.append(current_chunk.strip())
                         current_chunk = paragraph + "\n"
-                
                 if current_chunk:
-                    content_chunks.append(current_chunk.strip())
-            
-            # 将每个内容块格式化为文档格式添加到all_documents
-            for i, chunk in enumerate(content_chunks):
+                    quick_content_chunks.append(current_chunk.strip())
+
+            for i, chunk_text in enumerate(quick_content_chunks):
                 quick_parse_doc = {
                     "document_id": f"quick_parse_{session_id}_{i}",
-                    "document_name": f"当前会话文档-第{i+1}部分" if len(content_chunks) > 1 else "当前会话文档",
-                    "content_with_weight": chunk,
+                    "document_name": f"当前会话文档-第{i+1}部分" if len(quick_content_chunks) > 1 else "当前会话文档",
+                    "content_with_weight": chunk_text,
                     "id": f"quick_parse_{session_id}_{i}",
                     "positions": []
                 }
                 all_documents.append(quick_parse_doc)
-            
-            logger.info(f"快速解析内容已添加到文档列表，共{len(content_chunks)}个部分")
-        
-        message = {
-            "documents": all_documents,
-        }
+
+            logger.info(f"快速解析内容已添加到文档列表，共{len(quick_content_chunks)}个部分")
+
+        message = {"documents": all_documents}
         json_message = json.dumps(message, ensure_ascii=False)
+        if tracker:
+            tracker.record_event(
+                node_type="SSEDocumentsSent",
+                node_name="SSE Documents Sent",
+                output_data={
+                    "document_count": len(all_documents),
+                    "knowledge_document_count": len(retrieved_content or []),
+                    "quick_parse_document_count": len(quick_content_chunks),
+                },
+            )
         yield f"event: message\ndata: {json_message}\n\n"
 
-        # 处理流式响应
-        model_answer = ""  # 用于存储大模型的回答
-        think = "" # 用于存储思考过程
-        recommended_questions = []  # 初始化推荐问题列表
-        
         for chunk in completion:
-            if not ttft_recorded:
-                if chunk.choices and chunk.choices[0].delta:
-                    d = chunk.choices[0].delta
-                    if d.content or getattr(d, "reasoning_content", None):
-                        ttft_time = datetime.now()
-                        ttft_recorded = True
+            stream_chunk_count += 1
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            delta = choice.delta
 
-            if chunk.choices[0].finish_reason == "stop":
-                # 生成推荐问题
+            if not ttft_recorded and delta:
+                first_content = getattr(delta, "content", None)
+                first_reasoning = getattr(delta, "reasoning_content", None)
+                if first_content or first_reasoning:
+                    ttft_time = datetime.now()
+                    ttft_recorded = True
+                    if tracker:
+                        tracker.record_node(
+                            node_type="LLMFirstToken",
+                            node_name="LLM First Token",
+                            start_time=llm_start_time,
+                            end_time=ttft_time,
+                            status="success",
+                            output_data={
+                                "ttft_ms": int((ttft_time - llm_start_time).total_seconds() * 1000),
+                                "first_token_type": "content" if first_content else "reasoning_content",
+                            },
+                        )
+
+            if choice.finish_reason == "stop":
+                llm_end_time = datetime.now()
+                ttft_ms = int((ttft_time - llm_start_time).total_seconds() * 1000) if ttft_time else 0
+                if tracker:
+                    tracker.record_node(
+                        node_type="LLMAnswerStream",
+                        node_name="LLM Answer Stream",
+                        start_time=llm_start_time,
+                        end_time=llm_end_time,
+                        status="success",
+                        output_data={
+                            "stream_chunk_count": stream_chunk_count,
+                            "answer_chunk_count": answer_chunk_count,
+                            "thinking_chunk_count": thinking_chunk_count,
+                            "answer_chars": len(model_answer),
+                            "thinking_chars": len(think),
+                        },
+                    )
+
+                recommend_start = datetime.now()
                 try:
                     logger.info("开始生成推荐问题...")
                     recommended_questions = generate_recommended_questions(question, retrieved_content, session_id)
                     logger.info(f"推荐问题生成结果: {recommended_questions}")
-                    
+                    recommend_end = datetime.now()
+                    if tracker:
+                        tracker.record_node(
+                            node_type="RecommendQuestions",
+                            node_name="Recommend Questions",
+                            start_time=recommend_start,
+                            end_time=recommend_end,
+                            status="success",
+                            input_data={"question": question, "document_count": len(retrieved_content or [])},
+                            output_data={
+                                "recommended_questions": recommended_questions,
+                                "recommended_question_count": len(recommended_questions or []),
+                            },
+                        )
+
                     if recommended_questions:
-                        message = {
-                            "recommended_questions": recommended_questions,
-                        }
-                        json_message = json.dumps(message)
+                        message = {"recommended_questions": recommended_questions}
+                        json_message = json.dumps(message, ensure_ascii=False)
                         yield f"event: message\ndata: {json_message}\n\n"
                         logger.info("推荐问题已发送给前端")
                     else:
                         logger.warning("推荐问题生成为空")
-                        
                 except Exception as e:
+                    recommend_end = datetime.now()
                     logger.error(f"生成推荐问题失败: {str(e)}")
-                    recommended_questions = []  # 确保变量有值
+                    recommended_questions = []
+                    if tracker:
+                        tracker.record_node(
+                            node_type="RecommendQuestions",
+                            node_name="Recommend Questions",
+                            start_time=recommend_start,
+                            end_time=recommend_end,
+                            status="failed",
+                            error_message=str(e),
+                            input_data={"question": question},
+                        )
 
-                # 记录 LLM 链路节点和完成整个会话 Trace
                 if tracker:
-                    llm_end_time = datetime.now()
-                    ttft_ms = int((ttft_time - llm_start_time).total_seconds() * 1000) if ttft_time else 0
-                    
+                    final_answer_data = {
+                        "answer_summary": _summary_text(model_answer, 1200),
+                        "answer_chars": len(model_answer),
+                        "thinking_chars": len(think),
+                        "citation_marker_count": _citation_count(model_answer),
+                        "finish_reason": "stop",
+                    }
+                    tracker.record_event(
+                        node_type="LLMFinalAnswer",
+                        node_name="LLM Final Answer",
+                        output_data=final_answer_data,
+                    )
                     tracker.record_node(
                         node_type="LLMCall",
                         node_name="Large Language Model Call",
                         start_time=llm_start_time,
                         end_time=llm_end_time,
                         status="success",
-                        input_data={"prompt": prompt[:1500] + ("..." if len(prompt) > 1500 else "")},
-                        output_data={"answer": model_answer, "thinking": think},
+                        input_data={"prompt": _summary_text(prompt, 1500), "model": model_name},
+                        output_data={"answer": _summary_text(model_answer, 1500), "thinking": _summary_text(think, 1500)},
                         extra_data={"recommended_questions": recommended_questions}
                     )
-                    tracker.finish_run(status="success", ttft_ms=ttft_ms)
+                    tracker.record_event(
+                        node_type="SSEEndSent",
+                        node_name="SSE End Sent",
+                        output_data={"data": "[DONE]", "end_type": "success"},
+                    )
 
-                # 结束时发送 [DONE] 事件
                 yield "event: end\ndata: [DONE]\n\n"
-                # 将对话数据写入数据库
+
                 print("最终回答：\n")
                 print(model_answer)
-                write_chat_to_db(session_id, question, model_answer, all_documents, recommended_questions, think)
 
-                # 生成会话名称
-                update_session_name(session_id, question, user_id)
+                persist_ok = True
+                persist_error = None
+                persist_start = datetime.now()
+                try:
+                    write_chat_to_db(session_id, question, model_answer, all_documents, recommended_questions, think)
+                    persist_end = datetime.now()
+                    if tracker:
+                        tracker.record_node(
+                            node_type="PersistMessage",
+                            node_name="Persist Message",
+                            start_time=persist_start,
+                            end_time=persist_end,
+                            status="success",
+                            input_data={"session_id": session_id, "question": question},
+                            output_data={
+                                "documents_count": len(all_documents),
+                                "recommended_question_count": len(recommended_questions or []),
+                                "answer_chars": len(model_answer),
+                                "thinking_chars": len(think),
+                            },
+                        )
+                except Exception as e:
+                    persist_ok = False
+                    persist_error = str(e)
+                    persist_end = datetime.now()
+                    logger.error(f"对话数据落库失败: {persist_error}")
+                    if tracker:
+                        tracker.record_node(
+                            node_type="PersistMessage",
+                            node_name="Persist Message",
+                            start_time=persist_start,
+                            end_time=persist_end,
+                            status="failed",
+                            error_message=persist_error,
+                            input_data={"session_id": session_id, "question": question},
+                        )
+
+                title_start = datetime.now()
+                try:
+                    update_session_name(session_id, question, user_id)
+                    title_end = datetime.now()
+                    if tracker:
+                        tracker.record_node(
+                            node_type="SessionTitleUpdate",
+                            node_name="Session Title Update",
+                            start_time=title_start,
+                            end_time=title_end,
+                            status="success",
+                            input_data={"session_id": session_id, "user_id": user_id},
+                            output_data={"attempted": True},
+                        )
+                except Exception as e:
+                    title_end = datetime.now()
+                    logger.error(f"会话标题更新失败: {str(e)}")
+                    if tracker:
+                        tracker.record_node(
+                            node_type="SessionTitleUpdate",
+                            node_name="Session Title Update",
+                            start_time=title_start,
+                            end_time=title_end,
+                            status="failed",
+                            error_message=str(e),
+                            input_data={"session_id": session_id, "user_id": user_id},
+                        )
+
+                if tracker:
+                    if persist_ok:
+                        tracker.finish_run(status="success", ttft_ms=ttft_ms)
+                    else:
+                        tracker.finish_run(
+                            status="failed",
+                            ttft_ms=ttft_ms,
+                            error_message=f"回答已返回但落库失败: {persist_error}",
+                        )
                 break
-            else:
-                # 实时输出消息
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    model_answer += delta.content  # 累加大模型的回答
-                    message = {
-                        "role": "assistant",
-                        "content": delta.content,
-                        "thinking": False,
-                    }
-                    json_message = json.dumps(message)
-                    yield f"event: message\ndata: {json_message}\n\n"
-                else:
-                    think += delta.reasoning_content
-                    message = {
-                        "role": "assistant",
-                        "content": delta.reasoning_content,
-                        "thinking": True,
-                    }
-                    json_message = json.dumps(message)
-                    yield f"event: message\ndata: {json_message}\n\n"
+
+            content = getattr(delta, "content", None) if delta else None
+            reasoning_content = getattr(delta, "reasoning_content", None) if delta else None
+            if content:
+                answer_chunk_count += 1
+                model_answer += content
+                message = {
+                    "role": "assistant",
+                    "content": content,
+                    "thinking": False,
+                }
+                json_message = json.dumps(message, ensure_ascii=False)
+                yield f"event: message\ndata: {json_message}\n\n"
+            elif reasoning_content:
+                thinking_chunk_count += 1
+                think += reasoning_content
+                message = {
+                    "role": "assistant",
+                    "content": reasoning_content,
+                    "thinking": True,
+                }
+                json_message = json.dumps(message, ensure_ascii=False)
+                yield f"event: message\ndata: {json_message}\n\n"
 
     except Exception as e:
+        llm_end_time = datetime.now()
         if tracker:
-            llm_end_time = datetime.now()
             tracker.record_node(
                 node_type="LLMCall",
                 node_name="Large Language Model Call",
                 start_time=llm_start_time,
                 end_time=llm_end_time,
                 status="failed",
-                error_message=str(e)
+                error_message=str(e),
+                input_data={"model": model_name, "prompt": _summary_text(prompt, 1500)},
+                output_data={"partial_answer": _summary_text(model_answer, 1000), "partial_thinking": _summary_text(think, 1000)},
+            )
+            tracker.record_event(
+                node_type="SSEErrorSent",
+                node_name="SSE Error Sent",
+                status="failed",
+                output_data={"role": "error", "content": str(e)},
             )
             tracker.finish_run(status="failed", error_message=str(e))
 
-        # 发生错误时返回错误信息
         error_message = {
             "role": "error",
             "content": str(e)
         }
-        json_error_message = json.dumps(error_message)
+        json_error_message = json.dumps(error_message, ensure_ascii=False)
         yield f"event: error\ndata: {json_error_message}\n\n"
 
 

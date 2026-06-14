@@ -379,6 +379,7 @@ export function RunsTable({
               <TableHeader>
                 <TableRow>
                   <TableHead className="trace-col-question">用户问题</TableHead>
+                  <TableHead className="trace-col-intent">意图分类</TableHead>
                   <TableHead className="trace-col-trace-id">Trace Id</TableHead>
                   <TableHead className="trace-col-user">用户名</TableHead>
                   <TableHead className="trace-col-duration">耗时</TableHead>
@@ -393,6 +394,22 @@ export function RunsTable({
                   <TableRow key={run.traceId} className="trace-list-table-row">
                     <TableCell className="trace-col-question">
                       {renderTextOrEmpty(run.question)}
+                    </TableCell>
+                    <TableCell className="trace-col-intent">
+                      {run.intentName ? (
+                          <div className="trace-list-intent-cell">
+                            <span className="trace-list-intent-name">{run.intentName}</span>
+                            {run.intentScore !== null && run.intentScore !== undefined && (
+                                <span className="trace-list-intent-score">
+                                  {Math.round(run.intentScore * 100)}%
+                                </span>
+                            )}
+                          </div>
+                      ) : run.intentCode ? (
+                          <span className="trace-list-intent-code">{run.intentCode}</span>
+                      ) : (
+                          renderEmptyPlaceholder()
+                      )}
                     </TableCell>
                     <TableCell className="trace-col-trace-id">
                       <TraceIdCell traceId={run.traceId} />

@@ -14,7 +14,10 @@ import {
   Calendar,
   Hash,
   X,
-  Copy
+  Copy,
+  Target,
+  Crosshair,
+  HelpCircle
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -303,6 +306,22 @@ function NodeDetailCard({
                 </div>
               </div>
           )}
+          {"inputJson" in node && node.inputJson && (
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">输入数据</p>
+                <pre className="text-xs bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all text-slate-700">
+                  {tryPrettyJson(node.inputJson)}
+                </pre>
+              </div>
+          )}
+          {"outputJson" in node && node.outputJson && (
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">输出数据</p>
+                <pre className="text-xs bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all text-slate-700">
+                  {tryPrettyJson(node.outputJson)}
+                </pre>
+              </div>
+          )}
           {node.extraData && (
               <div>
                 <p className="text-xs font-medium text-slate-500 mb-1">额外数据</p>
@@ -362,6 +381,260 @@ function tryPrettyJson(raw: string): string {
   } catch {
     return raw;
   }
+}
+
+function parseTraceJson(raw?: string | null): any {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function getNodeInput(node?: RagTraceDetail["nodes"][number] | null): any {
+  const parsed = parseTraceJson(node?.inputJson);
+  return parsed?.data ?? parsed;
+}
+
+function getNodeOutput(node?: RagTraceDetail["nodes"][number] | null): any {
+  const parsed = parseTraceJson(node?.outputJson);
+  return parsed?.data ?? parsed;
+}
+
+function findNode(nodes: RagTraceDetail["nodes"], nodeType: string) {
+  return nodes.find((node) => node.nodeType === nodeType);
+}
+
+function truncateText(value?: string | null, limit = 260): string {
+  const text = (value || "").trim();
+  if (!text) return "—";
+  return text.length > limit ? `${text.slice(0, limit)}...` : text;
+}
+
+const END_TO_END_STAGES: Array<{
+  key: string;
+  title: string;
+  description: string;
+  nodeTypes: string[];
+}> = [
+  {
+    key: "request",
+    title: "用户请求",
+    description: "问题进入后端并加载运行配置",
+    nodeTypes: ["UserQuestionReceived", "AuthLoadSettings"]
+  },
+  {
+    key: "routing",
+    title: "路由与检索",
+    description: "意图分类、检索查询、ES 混合召回和重排",
+    nodeTypes: ["IntentClassify", "RetrievalQueryBuild", "ESHybridSearch", "RerankChunks", "VectorRetrieve"]
+  },
+  {
+    key: "clarification",
+    title: "追问与上下文",
+    description: "追问判断、追问合并、快速解析文档和上下文组装",
+    nodeTypes: ["ClarificationMerge", "AmbiguityAudit", "ClarifyResponse", "QuickParseLoad", "ContextAssemble"]
+  },
+  {
+    key: "generation",
+    title: "模型生成",
+    description: "Prompt 构建、LLM 流式生成、首包和最终回答",
+    nodeTypes: ["PromptBuild", "LLMStreamStart", "LLMFirstToken", "LLMAnswerStream", "LLMFinalAnswer", "RecommendQuestions", "LLMCall"]
+  },
+  {
+    key: "streaming",
+    title: "返回前端",
+    description: "引用文档、推荐问题、结束或错误事件",
+    nodeTypes: ["SSEDocumentsSent", "SSEEndSent", "SSEErrorSent"]
+  },
+  {
+    key: "persistence",
+    title: "持久化",
+    description: "回答写入消息表并更新会话标题",
+    nodeTypes: ["PersistMessage", "SessionTitleUpdate"]
+  }
+];
+
+function EndToEndTraceCard({
+                             detail,
+                             onSelectNode
+                           }: {
+  detail: RagTraceDetail;
+  onSelectNode: (nodeId: string) => void;
+}) {
+  const nodes = detail.nodes || [];
+  const run = detail.run;
+  const mergeNode = findNode(nodes, "ClarificationMerge");
+  const finalNode = findNode(nodes, "LLMFinalAnswer");
+  const llmNode = findNode(nodes, "LLMCall");
+  const persistNode = findNode(nodes, "PersistMessage");
+  const clarifyNode = findNode(nodes, "ClarifyResponse");
+  const sseEndNode = findNode(nodes, "SSEEndSent");
+  const promptNode = findNode(nodes, "PromptBuild");
+  const contextNode = findNode(nodes, "ContextAssemble");
+  const recommendNode = findNode(nodes, "RecommendQuestions");
+
+  const mergeInput = getNodeInput(mergeNode);
+  const mergeOutput = getNodeOutput(mergeNode);
+  const finalOutput = getNodeOutput(finalNode);
+  const llmOutput = getNodeOutput(llmNode);
+  const persistOutput = getNodeOutput(persistNode);
+  const clarifyOutput = getNodeOutput(clarifyNode);
+  const sseOutput = getNodeOutput(sseEndNode);
+  const promptOutput = getNodeOutput(promptNode);
+  const contextOutput = getNodeOutput(contextNode);
+  const recommendOutput = getNodeOutput(recommendNode);
+
+  const finalAnswerSummary =
+      finalOutput?.answer_summary ||
+      llmOutput?.answer ||
+      "";
+  const hasFinalAnswer = Boolean(finalNode || finalAnswerSummary);
+  const hasClarify = Boolean(clarifyNode);
+  const persistStatus = normalizeStatus(persistNode?.status);
+  const sseEndStatus = normalizeStatus(sseEndNode?.status);
+
+  const statusItems = [
+    {
+      label: "最终回答",
+      value: hasFinalAnswer ? "已生成" : hasClarify ? "等待补充" : "未完成",
+      variant: hasFinalAnswer ? "success" : hasClarify ? "warning" : "error"
+    },
+    {
+      label: "SSE 结束",
+      value: sseEndNode ? (sseOutput?.end_type || "已发送") : "未记录",
+      variant: sseEndStatus === "failed" ? "error" : sseEndNode ? "success" : "warning"
+    },
+    {
+      label: "消息落库",
+      value: persistNode ? (persistStatus === "failed" ? "失败" : "成功") : "未记录",
+      variant: persistStatus === "failed" ? "error" : persistNode ? "success" : "warning"
+    }
+  ];
+
+  return (
+      <Card className="border-slate-200">
+        <CardHeader className="py-4 px-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Crosshair className="h-4 w-4 text-blue-600" />
+              <CardTitle className="text-sm font-semibold text-slate-800">
+                端到端问答链路
+              </CardTitle>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {statusItems.map((item) => (
+                  <span
+                      key={item.label}
+                      className={cn(
+                          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs",
+                          item.variant === "success" && "bg-emerald-50 text-emerald-700 border border-emerald-100",
+                          item.variant === "warning" && "bg-amber-50 text-amber-700 border border-amber-100",
+                          item.variant === "error" && "bg-red-50 text-red-700 border border-red-100"
+                      )}
+                  >
+                    <span className="text-slate-500">{item.label}</span>
+                    <span className="font-medium">{item.value}</span>
+                  </span>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 pt-0 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+              <div className="text-xs font-medium text-slate-500 mb-1">用户原始问题</div>
+              <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">
+                {truncateText(mergeInput?.original_question || run.question, 420)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+              <div className="text-xs font-medium text-slate-500 mb-1">有效问题</div>
+              <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">
+                {truncateText(mergeOutput?.effective_question || run.question, 420)}
+              </div>
+            </div>
+          </div>
+
+          {hasClarify && !hasFinalAnswer ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+                <div className="text-xs font-medium text-amber-700 mb-2">本轮触发追问，未进入正式最终回答</div>
+                <ol className="list-decimal pl-5 space-y-1 text-sm text-amber-900">
+                  {(clarifyOutput?.clarifying_questions || []).map((question: string, index: number) => (
+                      <li key={`${question}-${index}`}>{question}</li>
+                  ))}
+                </ol>
+              </div>
+          ) : (
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="text-xs font-medium text-slate-500">模型最终回答摘要</div>
+                  <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+                    <span>回答 {finalOutput?.answer_chars ?? "—"} 字</span>
+                    <span>思考 {finalOutput?.thinking_chars ?? "—"} 字</span>
+                    <span>引用标记 {finalOutput?.citation_marker_count ?? "—"} 个</span>
+                    <span>推荐问题 {recommendOutput?.recommended_question_count ?? persistOutput?.recommended_question_count ?? "—"} 个</span>
+                    <span>总引用 {contextOutput?.total_reference_count ?? "—"} 条</span>
+                  </div>
+                </div>
+                <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">
+                  {truncateText(finalAnswerSummary, 900)}
+                </div>
+                {promptOutput?.prompt_length ? (
+                    <div className="mt-2 text-xs text-slate-500">
+                      Prompt 长度 {promptOutput.prompt_length}，引用范围 {promptOutput.reference_range || "—"}
+                    </div>
+                ) : null}
+              </div>
+          )}
+
+          <div className="space-y-2">
+            {END_TO_END_STAGES.map((stage) => {
+              const stageNodes = nodes.filter((node) => stage.nodeTypes.includes(node.nodeType || ""));
+              const failed = stageNodes.some((node) => normalizeStatus(node.status) === "failed");
+              const success = stageNodes.length > 0 && stageNodes.every((node) => normalizeStatus(node.status) !== "failed");
+              return (
+                  <div key={stage.key} className="grid grid-cols-[150px_1fr] gap-4 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                    <div className="flex items-start gap-2">
+                      <span
+                          className={cn(
+                              "mt-1 h-2.5 w-2.5 rounded-full shrink-0",
+                              failed ? "bg-red-500" : success ? "bg-emerald-500" : "bg-slate-300"
+                          )}
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-slate-800">{stage.title}</div>
+                        <div className="text-[11px] text-slate-500">{stage.description}</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {stageNodes.length ? stageNodes.map((node) => (
+                          <button
+                              key={`${stage.key}-${node.nodeId}`}
+                              type="button"
+                              onClick={() => onSelectNode(node.nodeId)}
+                              className={cn(
+                                  "inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors hover:border-blue-300 hover:bg-blue-50",
+                                  normalizeStatus(node.status) === "failed"
+                                      ? "border-red-200 bg-red-50 text-red-700"
+                                      : "border-slate-200 bg-slate-50 text-slate-700"
+                              )}
+                          >
+                            <span>{prettifyNodeName(node.nodeName || node.nodeType)}</span>
+                            <span className="text-slate-400">{formatDuration(resolveNodeDuration(node))}</span>
+                          </button>
+                      )) : (
+                          <span className="text-xs text-slate-400">未记录</span>
+                      )}
+                    </div>
+                  </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+  );
 }
 
 // ============ 主组件 ============
@@ -542,6 +815,27 @@ export function RagTraceDetailPage() {
     return { total, failed, success, running, avgDuration, topSlowestId, ttftMs, ttftKind };
   }, [detail?.nodes]);
 
+  const intentInfo = useMemo(() => {
+    const nodes = detail?.nodes || [];
+    const intentNode = nodes.find(n => n.nodeType === "IntentClassify");
+    if (!intentNode?.outputJson) return null;
+    try {
+      const parsed = JSON.parse(intentNode.outputJson);
+      if (parsed.intent_code) {
+        return {
+          matched: true as const,
+          code: parsed.intent_code as string,
+          name: (parsed.name || parsed.intent_code) as string,
+          kind: parsed.kind as number | undefined,
+          score: parsed.score as number | undefined,
+        };
+      }
+      return { matched: false as const, reason: "no_intent_matched" };
+    } catch {
+      return { matched: false as const, reason: "parse_error" };
+    }
+  }, [detail?.nodes]);
+
   const activeNode = useMemo(() => {
     if (!activeNodeId) return null;
     return detail?.nodes?.find(n => n.nodeId === activeNodeId) || null;
@@ -617,6 +911,18 @@ export function RagTraceDetailPage() {
 
           {/* 右侧按钮组 */}
           <div className="flex items-center gap-2">
+            {selectedRun.sessionId && (
+                <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="text-slate-600 hover:text-slate-800"
+                >
+                  <Link to={`/admin/traces/conversations/${encodeURIComponent(selectedRun.sessionId)}`}>
+                    返回会话
+                  </Link>
+                </Button>
+            )}
             <Button
                 asChild
                 variant="outline"
@@ -651,6 +957,18 @@ export function RagTraceDetailPage() {
           <Hash className="h-3 w-3" />
           {traceId.length > 28 ? `${traceId.slice(0, 12)}...${traceId.slice(-8)}` : traceId}
         </span>
+          {selectedRun.sessionId && (
+              <span
+                  className="font-mono cursor-pointer hover:text-slate-700 flex items-center gap-1 transition-colors"
+                  onClick={() => copyToClipboard(selectedRun.sessionId!, "Session Id")}
+                  title="点击复制 Session Id"
+              >
+                <Hash className="h-3 w-3" />
+                {selectedRun.sessionId.length > 28
+                    ? `${selectedRun.sessionId.slice(0, 12)}...${selectedRun.sessionId.slice(-8)}`
+                    : selectedRun.sessionId}
+              </span>
+          )}
           <span className="flex items-center gap-1">
           <Calendar className="h-3 w-3" />
             {formatDateTime(selectedRun.startTime ?? undefined)}
@@ -672,6 +990,72 @@ export function RagTraceDetailPage() {
                 <span className="text-red-600 ml-1">{selectedRun.errorMessage}</span>
               </div>
             </div>
+        )}
+
+        <EndToEndTraceCard
+            detail={detail!}
+            onSelectNode={(nodeId) => setActiveNodeId(nodeId)}
+        />
+
+        {/* 意图分类 */}
+        {intentInfo && (
+            <Card className={intentInfo.matched ? "border-blue-200 bg-blue-50/60" : "border-amber-200 bg-amber-50/60"}>
+              <CardContent className="py-4 px-5">
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                      "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
+                      intentInfo.matched ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"
+                  )}>
+                    {intentInfo.matched ? <Target className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium text-slate-700">意图分类</span>
+                      {intentInfo.matched ? (
+                          <Badge variant="default" className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-100">
+                            已匹配
+                          </Badge>
+                      ) : (
+                          <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-100">
+                            未匹配
+                          </Badge>
+                      )}
+                    </div>
+                    {intentInfo.matched ? (
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                          <span className="font-semibold text-slate-900">
+                            {intentInfo.name}
+                          </span>
+                          <span className="text-xs font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                            {intentInfo.code}
+                          </span>
+                          {intentInfo.kind !== undefined && (
+                              <span className="text-xs text-slate-500">
+                                类型：{intentInfo.kind === 0 ? "领域" : intentInfo.kind === 1 ? "系统" : intentInfo.kind === 2 ? "数据" : String(intentInfo.kind)}
+                              </span>
+                          )}
+                          {intentInfo.score !== undefined && (
+                              <span className={cn(
+                                  "text-xs font-mono px-1.5 py-0.5 rounded",
+                                  intentInfo.score >= 0.8 ? "bg-emerald-100 text-emerald-700" :
+                                      intentInfo.score >= 0.5 ? "bg-amber-100 text-amber-700" :
+                                          "bg-red-100 text-red-700"
+                              )}>
+                                置信度：{(intentInfo.score * 100).toFixed(0)}%
+                              </span>
+                          )}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-slate-600">
+                          {intentInfo.reason === "parse_error"
+                              ? "意图数据解析失败"
+                              : "此次查询未命中任何意图节点，已走默认通用问答路由"}
+                        </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
         )}
 
         {/* 指标条 */}
