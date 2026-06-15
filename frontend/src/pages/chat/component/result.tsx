@@ -63,7 +63,16 @@ export function Result(props: {
         },
         renderer(token) {
           const index = this.parser.parseInline(token.index)
-          return `<span class="refrence-token" data-refrence-index="${index}">[${Number(index) + 1}]</span>`
+          const citationNumber = Number(index)
+          const referenceIndex =
+            Number.isFinite(citationNumber) && citationNumber > 0
+              ? citationNumber - 1
+              : 0
+          const label =
+            Number.isFinite(citationNumber) && citationNumber > 0
+              ? citationNumber
+              : index
+          return `<span class="refrence-token" data-refrence-index="${referenceIndex}">[${label}]</span>`
         },
       },
     ],

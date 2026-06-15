@@ -14,6 +14,8 @@ class Message(Base):
     documents = Column(Text)
     recommended_questions = Column(Text)
     think = Column(Text)
+    message_type = Column(String(32), nullable=False, server_default="answer")
+    metadata_json = Column(Text)
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
     updated_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
 

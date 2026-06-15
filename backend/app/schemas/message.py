@@ -13,6 +13,8 @@ class MessageResponse(BaseModel):
     documents: Optional[Union[list, dict]] = None
     recommended_questions: Optional[Union[list, dict]] = None
     think: Optional[str] 
+    message_type: str = "answer"
+    metadata_json: Optional[str] = None
 
     class Config:
         orm_mode = True

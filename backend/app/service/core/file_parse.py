@@ -76,6 +76,9 @@ def process_items(items: List[Dict[str, Any]], file_name: str, index_name: str) 
             d["title_tks"] = item["title_tks"]
             d["doc_id"] = xxhash.xxh64(file_name.encode("utf-8")).hexdigest()
             d["docnm"] = file_name
+            for metadata_key in ("page_num_int", "position_int", "top_int"):
+                if metadata_key in item:
+                    d[metadata_key] = item[metadata_key]
             
             # 将嵌入向量存储到字典中
             d[f"q_{len(embedding)}_vec"] = embedding
@@ -144,4 +147,3 @@ if __name__ == "__main__":
     # 创建 ESConnection 的实例并插入数据
     es_connection = ESConnection()
     es_connection.insert(documents=result, indexName="世运电路2023中报点评")
-

@@ -218,7 +218,16 @@ def generate_session_name(user_question):
         return user_question
 
 
-def write_chat_to_db(session_id: str, user_question: str, model_answer: str, retrieval_content, recommended_questions, think ):
+def write_chat_to_db(
+    session_id: str,
+    user_question: str,
+    model_answer: str,
+    retrieval_content,
+    recommended_questions,
+    think,
+    message_type: str = "answer",
+    metadata: dict | None = None,
+):
     """
     将对话数据写入数据库。
 
@@ -231,11 +240,36 @@ def write_chat_to_db(session_id: str, user_question: str, model_answer: str, ret
     try:
         documents_json = json.dumps(retrieval_content, ensure_ascii=False)
 
+        metadata_json = json.dumps(metadata or {}, ensure_ascii=False) if metadata else None
+        recommended_questions_json = (
+            recommended_questions
+            if isinstance(recommended_questions, str)
+            else json.dumps(recommended_questions or [], ensure_ascii=False)
+        )
+
         db.execute(
             text(
                 """
-                INSERT INTO messages (session_id, user_question, model_answer, documents, recommended_questions, think )
-                VALUES (:session_id, :user_question, :model_answer, :documents, :recommended_questions, :think)
+                INSERT INTO messages (
+                    session_id,
+                    user_question,
+                    model_answer,
+                    documents,
+                    recommended_questions,
+                    think,
+                    message_type,
+                    metadata_json
+                )
+                VALUES (
+                    :session_id,
+                    :user_question,
+                    :model_answer,
+                    :documents,
+                    :recommended_questions,
+                    :think,
+                    :message_type,
+                    :metadata_json
+                )
                 """
             ),
             {
@@ -243,8 +277,10 @@ def write_chat_to_db(session_id: str, user_question: str, model_answer: str, ret
                 "user_question": user_question,
                 "model_answer": model_answer,
                 "documents": documents_json,
-                "recommended_questions": recommended_questions,
+                "recommended_questions": recommended_questions_json,
                 "think": think,
+                "message_type": message_type,
+                "metadata_json": metadata_json,
             }
         )
         db.commit()
@@ -306,7 +342,16 @@ def update_session_name(session_id: str, question: str, user_id: str):
     finally:
         db.close()
 
-def get_chat_completion(session_id, question, retrieved_content, user_id, tracker=None, settings=None):
+def get_chat_completion(
+    session_id,
+    question,
+    retrieved_content,
+    user_id,
+    tracker=None,
+    settings=None,
+    persist_question=None,
+    message_metadata=None,
+):
     """
     获取流式聊天完成结果，并按照指定格式输出。
 
@@ -604,7 +649,16 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
                 persist_error = None
                 persist_start = datetime.now()
                 try:
-                    write_chat_to_db(session_id, question, model_answer, all_documents, recommended_questions, think)
+                    persisted_question = persist_question if persist_question is not None else question
+                    write_chat_to_db(
+                        session_id,
+                        persisted_question,
+                        model_answer,
+                        all_documents,
+                        recommended_questions,
+                        think,
+                        metadata=message_metadata,
+                    )
                     persist_end = datetime.now()
                     if tracker:
                         tracker.record_node(
@@ -613,7 +667,7 @@ def get_chat_completion(session_id, question, retrieved_content, user_id, tracke
                             start_time=persist_start,
                             end_time=persist_end,
                             status="success",
-                            input_data={"session_id": session_id, "question": question},
+                            input_data={"session_id": session_id, "question": persisted_question},
                             output_data={
                                 "documents_count": len(all_documents),
                                 "recommended_question_count": len(recommended_questions or []),

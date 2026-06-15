@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS messages (
     documents TEXT,
     recommended_questions TEXT,
     think TEXT,
+    message_type VARCHAR(32) NOT NULL DEFAULT 'answer',
+    metadata_json TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -81,6 +81,8 @@ def retrieve_content(indexNames: str, question: str, top_k: int = 5, kb_ids=None
             "document_id": doc_id,
             "document_name": docnm,
             'content_with_weight': content_with_weight,
+            "positions": chunk.get("positions") or chunk.get("position_int") or [],
+            "page_num_int": chunk.get("page_num_int") or [],
         }
         
         extracted_data.append(message)

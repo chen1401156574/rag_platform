@@ -26,6 +26,12 @@ export function detail(
       think?: string
       documents?: string
       recommended_questions?: string
+      message_type?: string
+      metadata_json?: string
+      original_question?: string
+      clarifications?: string
+      clarifying_questions?: string[]
+      legacy_merged_clarification?: boolean
     }[]
   >(`/get_messages`, {
     ...options,

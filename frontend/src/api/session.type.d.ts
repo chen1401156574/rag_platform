@@ -21,6 +21,8 @@ declare namespace API {
     recommended_questions?: string[]
     clarifying_questions?: string[]
     original_question?: string
+    clarifications?: string
+    legacy_merged_clarification?: boolean
   }
 
   interface Document {
@@ -30,10 +32,11 @@ declare namespace API {
   }
 
   interface Reference {
-    id: string
+    id: string | number
     document_id: string
     document_name: string
     content_with_weight: string
-    positions: number[][]
+    positions?: number[][]
+    page_num_int?: number[]
   }
 }

@@ -7,6 +7,33 @@ import { Button, Drawer, Input, Tooltip } from 'antd'
 import { useMemo, useState } from 'react'
 import styles from './citations.module.scss'
 
+function normalizePageNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value >= 0 ? value : null
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+  }
+  return null
+}
+
+function firstPageLabel(item: API.Reference): string {
+  const directPage = item.page_num_int
+    ?.map(normalizePageNumber)
+    .find((value): value is number => value !== null)
+
+  if (directPage !== undefined) {
+    return String(directPage)
+  }
+
+  const positionPage = item.positions
+    ?.map((position) => normalizePageNumber(position?.[0]))
+    .find((value): value is number => value !== null)
+
+  return positionPage !== undefined ? String(positionPage) : '-'
+}
+
 function CitationsItem(props: {
   item: API.Reference
   index: number
@@ -46,7 +73,7 @@ function CitationsItem(props: {
 
       <div className={styles['footer']}>
         <div className={styles['footer-desc']}>
-          页码 {item.positions?.[0]?.[0] ?? '-'}
+          页码 {firstPageLabel(item)}
         </div>
         <Button
           className={styles['footer-button']}

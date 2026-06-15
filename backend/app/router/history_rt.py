@@ -6,11 +6,95 @@ from schemas.message import FilestResponse , SessionListResponse, SessionRespons
 from fastapi_jwt import JwtAuthorizationCredentials
 from service.auth import access_security
 from typing import List
-from sqlalchemy import text ,select 
+from sqlalchemy import inspect, text ,select
 from urllib.parse import unquote
 from service.document_operations import delete_document
+import json
+import re
 
 router = APIRouter()
+
+_MERGED_CLARIFICATION_RE = re.compile(
+    r"^\s*用户原始提问：(?P<original>.*?)\s*用户对追问的补充说明：(?P<clarifications>.*?)\s*请基于以上完整信息生成回答。\s*$",
+    re.S,
+)
+
+
+def _parse_metadata(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_legacy_merged_question(question: str | None) -> dict:
+    if not question:
+        return {}
+    match = _MERGED_CLARIFICATION_RE.match(question)
+    if not match:
+        return {}
+    return {
+        "original_question": match.group("original").strip(),
+        "clarifications": match.group("clarifications").strip(),
+        "effective_question": question,
+        "legacy_merged_clarification": True,
+    }
+
+
+def _messages_select_sql(db: Session) -> str:
+    inspector = inspect(db.get_bind())
+    columns = {column["name"] for column in inspector.get_columns("messages")}
+    message_type_expr = "message_type" if "message_type" in columns else "'answer' AS message_type"
+    metadata_json_expr = "metadata_json" if "metadata_json" in columns else "NULL AS metadata_json"
+    return f"""
+        SELECT
+            message_id,
+            session_id,
+            user_question,
+            model_answer,
+            documents,
+            recommended_questions,
+            think,
+            created_at,
+            {message_type_expr},
+            {metadata_json_expr}
+        FROM messages
+        WHERE session_id = :session_id
+        ORDER BY created_at ASC
+    """
+
+
+def _message_record(message) -> dict:
+    metadata = _parse_metadata(message.metadata_json)
+    legacy = _parse_legacy_merged_question(message.user_question)
+    if legacy:
+        metadata = {**legacy, **metadata}
+
+    message_type = message.message_type or "answer"
+    if legacy and message_type == "answer":
+        user_question = metadata.get("clarifications") or message.user_question
+    else:
+        user_question = message.user_question
+
+    return {
+        "message_id": message.message_id,
+        "session_id": message.session_id,
+        "user_question": user_question,
+        "model_answer": message.model_answer,
+        "documents": message.documents,
+        "recommended_questions": message.recommended_questions,
+        "think": message.think,
+        "message_type": message_type,
+        "metadata_json": message.metadata_json,
+        "original_question": metadata.get("original_question"),
+        "clarifications": metadata.get("clarifications"),
+        "clarifying_questions": metadata.get("clarifying_questions") or [],
+        "legacy_merged_clarification": bool(metadata.get("legacy_merged_clarification")),
+        "created_at": message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    }
 
 ############################
 #   获取文档列表
@@ -104,26 +188,10 @@ async def get_messages_by_session_id(
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
         # 查询 messages 表中对应 session_id 的消息
-        messages_data = db.execute(
-            text("SELECT message_id, session_id, user_question, model_answer, documents, recommended_questions, think, created_at FROM messages WHERE session_id = :session_id"),
-            {"session_id": session_id}
-        ).fetchall()
+        messages_data = db.execute(text(_messages_select_sql(db)), {"session_id": session_id}).fetchall()
 
         # 构造返回数据
-        messages = []
-        for message in messages_data:
-            messages.append(
-                {
-                    "message_id": message.message_id,
-                    "session_id": message.session_id,
-                    "user_question": message.user_question,
-                    "model_answer":message.model_answer,
-                    "documents" : message.documents,
-                    "recommended_questions" : message.recommended_questions,
-                    "think" : message.think,
-                    "created_at": message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                }
-            )
+        messages = [_message_record(message) for message in messages_data]
 
         return messages
 

@@ -758,15 +758,16 @@ select:focus:not(:focus-visible),
     .admin-layout .admin-main:has(.trace-list-page) {
       height: 100vh;
       min-height: 0;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
     }
 
     .admin-layout .admin-main:has(.trace-list-page) .admin-content {
-      flex: 1;
+      flex: 0 0 auto;
       min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      display: block;
+      overflow: visible;
       max-width: none;
       padding: 16px 24px 12px;
     }
@@ -776,11 +777,10 @@ select:focus:not(:focus-visible),
     }
 
     .admin-layout .trace-list-page {
-      flex: 1;
+      flex: none;
       min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      display: block;
+      overflow: visible;
     }
   }
 

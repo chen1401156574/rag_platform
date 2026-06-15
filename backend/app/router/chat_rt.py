@@ -11,7 +11,12 @@ from service.core.file_parse import execute_insert_process
 from service.core.api.utils.file_utils import get_project_base_directory
 from fastapi_jwt import JwtAuthorizationCredentials
 from service.core.retrieval import retrieve_content
-from service.core.chat import get_chat_completion, stream_clarify_response
+from service.core.chat import (
+    get_chat_completion,
+    stream_clarify_response,
+    update_session_name,
+    write_chat_to_db,
+)
 from service.ambiguity_service import check_draft_and_clarify, merge_clarifications
 from service.intent_engine import default_intent_router
 from service.auth import access_security
@@ -253,6 +258,71 @@ def _stream_chat_response(
         )
         if clarifying_questions:
             logger.info(f"检测到歧义，生成 {len(clarifying_questions)} 个追问")
+            clarify_metadata = {
+                "original_question": question,
+                "clarifying_questions": clarifying_questions,
+            }
+            persist_start = datetime.now()
+            try:
+                write_chat_to_db(
+                    session_id,
+                    question,
+                    "",
+                    [],
+                    [],
+                    None,
+                    message_type="clarify",
+                    metadata=clarify_metadata,
+                )
+                persist_end = datetime.now()
+                tracker.record_node(
+                    node_type="PersistMessage",
+                    node_name="Persist Clarify Message",
+                    start_time=persist_start,
+                    end_time=persist_end,
+                    status="success",
+                    input_data={"session_id": session_id, "question": question, "message_type": "clarify"},
+                    output_data={"clarifying_question_count": len(clarifying_questions)},
+                )
+            except Exception as exc:
+                persist_end = datetime.now()
+                logger.error(f"追问消息落库失败: {str(exc)}")
+                tracker.record_node(
+                    node_type="PersistMessage",
+                    node_name="Persist Clarify Message",
+                    start_time=persist_start,
+                    end_time=persist_end,
+                    status="failed",
+                    error_message=str(exc),
+                    input_data={"session_id": session_id, "question": question, "message_type": "clarify"},
+                )
+
+            title_start = datetime.now()
+            try:
+                update_session_name(session_id, question, user_id)
+                title_end = datetime.now()
+                tracker.record_node(
+                    node_type="SessionTitleUpdate",
+                    node_name="Session Title Update",
+                    start_time=title_start,
+                    end_time=title_end,
+                    status="success",
+                    input_data={"session_id": session_id, "user_id": user_id, "source": "clarify"},
+                    output_data={"attempted": True},
+                )
+            except Exception as exc:
+                title_end = datetime.now()
+                logger.error(f"追问会话标题更新失败: {str(exc)}")
+                tracker.record_node(
+                    node_type="SessionTitleUpdate",
+                    node_name="Session Title Update",
+                    start_time=title_start,
+                    end_time=title_end,
+                    status="failed",
+                    error_message=str(exc),
+                    input_data={"session_id": session_id, "user_id": user_id, "source": "clarify"},
+                )
+
             tracker.record_event(
                 node_type="ClarifyResponse",
                 node_name="Clarify SSE Response",
@@ -289,8 +359,27 @@ def _stream_chat_response(
         )
 
     logger.info("Start generating answer")
+    message_metadata = None
+    persist_question = None
+    if clarifications and original_question:
+        persist_question = clarifications
+        message_metadata = {
+            "original_question": original_question,
+            "clarifications": clarifications,
+            "effective_question": effective_question,
+        }
+
     return StreamingResponse(
-        get_chat_completion(session_id, effective_question, references, user_id, tracker=tracker, settings=settings),
+        get_chat_completion(
+            session_id,
+            effective_question,
+            references,
+            user_id,
+            tracker=tracker,
+            settings=settings,
+            persist_question=persist_question,
+            message_metadata=message_metadata,
+        ),
         media_type="text/event-stream",
     )
 

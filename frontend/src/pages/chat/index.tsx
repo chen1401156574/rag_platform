@@ -25,9 +25,11 @@ import {
   transportToChatEnter,
 } from './shared'
 
-async function scrollToBottom(container: HTMLDivElement | null) {
+function scrollToBottom(
+  container: HTMLDivElement | null,
+  behavior: ScrollBehavior = 'auto',
+) {
   if (!container) return
-  await new Promise((resolve) => setTimeout(resolve))
 
   const threshold = 200
   const distanceToBottom =
@@ -38,7 +40,7 @@ async function scrollToBottom(container: HTMLDivElement | null) {
   if (distanceToBottom <= threshold) {
     container.scrollTo({
       top: container.scrollHeight,
-      behavior: 'smooth',
+      behavior,
     })
   }
 }
@@ -47,6 +49,55 @@ type ChatRouteState = {
   sessionId?: string
   resetSessionAt?: number
   selectedAt?: number
+}
+
+type HistoryMessage = {
+  user_question?: string
+  model_answer?: string
+  think?: string
+  documents?: string
+  recommended_questions?: string
+  message_type?: string
+  original_question?: string
+  clarifications?: string
+  clarifying_questions?: string[]
+  legacy_merged_clarification?: boolean
+}
+
+function parseJsonArray<T>(value?: string): T[] {
+  if (!value) return []
+  try {
+    const data = JSON.parse(value)
+    return Array.isArray(data) ? (data as T[]) : []
+  } catch (error) {
+    console.error(error)
+    return []
+  }
+}
+
+function normalizeReferences(list?: API.Reference[]): API.Reference[] {
+  return (list ?? []).map((item, index) => ({
+    ...item,
+    id: item.id ?? index + 1,
+    document_id: item.document_id,
+    document_name: item.document_name,
+    content_with_weight: item.content_with_weight,
+    positions: item.positions ?? [],
+    page_num_int: item.page_num_int ?? [],
+  }))
+}
+
+function documentsFromReferences(reference?: API.Reference[]): API.Document[] {
+  const map = new Map<string, API.Document>()
+  reference?.forEach((chunk) => {
+    if (!chunk.document_id) return
+    map.set(chunk.document_id, {
+      document_id: chunk.document_id,
+      document_name: chunk.document_name,
+      content_with_weight: chunk.content_with_weight,
+    })
+  })
+  return Array.from(map.values())
 }
 
 export default function Index() {
@@ -81,49 +132,77 @@ export default function Index() {
       manual: true,
       onSuccess(data) {
         chat.list = []
-        data.forEach((item) => {
-          if (item.user_question) {
+        let lastDocuments: API.Document[] = []
+        let lastAssistantItem: API.ChatItem | null = null
+
+        data.forEach((item: HistoryMessage) => {
+          const messageType = item.message_type || 'answer'
+          const originalQuestion = item.original_question?.trim()
+          const clarifications = item.clarifications?.trim()
+
+          if (messageType === 'clarify') {
+            const question = originalQuestion || item.user_question
+            if (question) {
+              chat.list.push({
+                id: createChatId(),
+                role: ChatRole.User,
+                type: ChatType.Text,
+                content: question,
+              })
+            }
+
+            if (item.clarifying_questions?.length) {
+              const assistantItem: API.ChatItem = {
+                id: createChatId(),
+                role: ChatRole.Assistant,
+                type: ChatType.Document,
+                clarifying_questions: item.clarifying_questions,
+                original_question: question,
+              }
+              chat.list.push(assistantItem)
+              lastAssistantItem = assistantItem
+            }
+            return
+          }
+
+          if (item.legacy_merged_clarification && originalQuestion) {
+            chat.list.push({
+              id: createChatId(),
+              role: ChatRole.User,
+              type: ChatType.Text,
+              content: originalQuestion,
+            })
+            if (item.user_question) {
+              chat.list.push({
+                id: createChatId(),
+                role: ChatRole.User,
+                type: ChatType.Text,
+                content: item.user_question,
+                clarifications: clarifications || item.user_question,
+                original_question: originalQuestion,
+                legacy_merged_clarification: true,
+              })
+            }
+          } else if (item.user_question) {
             chat.list.push({
               id: createChatId(),
               role: ChatRole.User,
               type: ChatType.Text,
               content: item.user_question,
+              clarifications,
+              original_question: originalQuestion,
             })
           }
 
           if (item.model_answer) {
-            const map = new Map<string, API.Document>()
-            let reference: API.Reference[] = []
-            let recommended_questions: string[] = []
-
-            if (item.documents) {
-              try {
-                reference = JSON.parse(item.documents) as API.Reference[]
-              } catch (error) {
-                console.error(error)
-              }
-            }
-
-            if (item.recommended_questions) {
-              try {
-                recommended_questions = JSON.parse(
-                  item.recommended_questions,
-                ) as string[]
-              } catch (error) {
-                console.error(error)
-              }
-            }
-
-            reference?.forEach((chunk) => {
-              map.set(chunk.document_id, {
-                document_id: chunk.document_id,
-                document_name: chunk.document_name,
-                content_with_weight: chunk.content_with_weight,
-              })
-            })
-            const documents = Array.from(map.values())
-
-            chat.list.push({
+            const reference = normalizeReferences(
+              parseJsonArray<API.Reference>(item.documents),
+            )
+            const documents = documentsFromReferences(reference)
+            const recommended_questions = parseJsonArray<string>(
+              item.recommended_questions,
+            )
+            const assistantItem: API.ChatItem = {
               id: createChatId(),
               role: ChatRole.Assistant,
               type: ChatType.Document,
@@ -134,9 +213,16 @@ export default function Index() {
               recommended_questions: recommended_questions?.length
                 ? recommended_questions
                 : undefined,
-            })
+            }
+            chat.list.push(assistantItem)
+            lastAssistantItem = assistantItem
+            if (documents.length) {
+              lastDocuments = documents
+            }
           }
         })
+        setDocuments(lastDocuments)
+        setCurrentChatItem(lastAssistantItem)
 
         setTimeout(() => {
           if (contentRef.current) {
@@ -229,6 +315,44 @@ export default function Index() {
     async (target: API.ChatItem, message: string, targetSessionId: string, clarify?: { clarifications: string; original_question: string }) => {
       setCurrentChatItem(target)
       target.loading = true
+      let pendingContent = ''
+      let pendingThinking = ''
+      let flushFrame: number | null = null
+      let scrollFrame: number | null = null
+
+      const requestFrame = (callback: FrameRequestCallback) => {
+        if (typeof window === 'undefined') {
+          return setTimeout(() => callback(Date.now()), 16) as unknown as number
+        }
+        return window.requestAnimationFrame(callback)
+      }
+
+      const scheduleScroll = () => {
+        if (scrollFrame !== null) return
+        scrollFrame = requestFrame(() => {
+          scrollFrame = null
+          scrollToBottom(contentRef.current)
+        })
+      }
+
+      const flushPending = () => {
+        flushFrame = null
+        if (pendingThinking) {
+          target.think = `${target.think || ''}${pendingThinking}`
+          pendingThinking = ''
+        }
+        if (pendingContent) {
+          target.content = `${target.content || ''}${pendingContent}`
+          pendingContent = ''
+        }
+        scheduleScroll()
+      }
+
+      const scheduleFlush = () => {
+        if (flushFrame !== null) return
+        flushFrame = requestFrame(flushPending)
+      }
+
       try {
         //后端接口
         const res = await api.session.chat({
@@ -243,19 +367,23 @@ export default function Index() {
         if (!reader) return
 
         await read(reader)
-      } catch (error: any) {
-        target.error = error?.message ?? 'Unknown error'
+      } catch (error: unknown) {
+        target.error = error instanceof Error ? error.message : 'Unknown error'
         throw error
       } finally {
         target.loading = false
       }
 
-      async function read(reader: ReadableStreamDefaultReader<any>) {
+      async function read(reader: ReadableStreamDefaultReader<Uint8Array>) {
         let temp = ''
         const decoder = new TextDecoder('utf-8')
         while (true) {
           const { value, done } = await reader.read()
-          temp += decoder.decode(value)
+          if (value) {
+            temp += decoder.decode(value, { stream: !done })
+          } else if (done) {
+            temp += decoder.decode()
+          }
 
           while (true) {
             const index = temp.indexOf('\n')
@@ -266,11 +394,19 @@ export default function Index() {
             //我们只需要data开头的数据，流式数据
             if (slice.startsWith('data: ')) {
               parseData(slice)
-              scrollToBottom(contentRef.current)
             }
           }
 
           if (done) {
+            temp
+              .split('\n')
+              .filter(Boolean)
+              .forEach((slice) => {
+                if (slice.startsWith('data: ')) {
+                  parseData(slice)
+                }
+              })
+            flushPending()
             console.debug('数据接受完毕', temp)
             target.loading = false
             break
@@ -282,7 +418,7 @@ export default function Index() {
         try {
           const str = slice
             .trim()
-            .replace(/^data\: /, '')
+            .replace(/^data: /, '')
             .trim()
           if (str === '[DONE]') {
             return
@@ -291,35 +427,35 @@ export default function Index() {
           const json = JSON.parse(str)
           if (json?.content) {
             if (json.thinking) {
-              target.think = `${target.think || ''}${json.content || ''}`
+              pendingThinking += json.content || ''
             } else {
-              target.content = `${target.content || ''}${json.content || ''}`
+              pendingContent += json.content || ''
             }
+            scheduleFlush()
           }
 
           if (json?.documents?.length) {
-            target.reference = json.documents
+            flushPending()
+            const reference = normalizeReferences(json.documents)
+            target.reference = reference
 
-            const map = new Map<string, API.Document>()
-            json?.documents.forEach((chunk: API.Reference) => {
-              map.set(chunk.document_id, {
-                document_id: chunk.document_id,
-                document_name: chunk.document_name,
-                content_with_weight: chunk.content_with_weight,
-              })
-            })
-            const documents = Array.from(map.values())
+            const documents = documentsFromReferences(reference)
             target.documents = documents
             setDocuments(documents)
+            scheduleScroll()
           }
 
           if (json?.clarifying_questions?.length) {
+            flushPending()
             target.clarifying_questions = json.clarifying_questions
             target.original_question = json.original_question
+            scheduleScroll()
           }
 
           if (json?.recommended_questions?.length) {
+            flushPending()
             target.recommended_questions = json.recommended_questions
+            scheduleScroll()
           }
         } catch {
           console.debug('解析失败')
