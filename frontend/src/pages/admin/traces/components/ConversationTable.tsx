@@ -87,8 +87,8 @@ export function ConversationTable({
             <p className="text-sm">暂无符合条件的会话链路</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="trace-conversation-table-wrap">
+            <Table className="trace-conversation-table">
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[320px]">会话 / 最近问题</TableHead>

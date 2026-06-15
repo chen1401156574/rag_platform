@@ -1415,6 +1415,32 @@ select:focus:not(:focus-visible),
     table-layout: auto;
   }
 
+  .admin-layout .trace-conversation-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-gutter: stable;
+  }
+
+  .admin-layout .trace-conversation-table-wrap .ui-table-wrap {
+    margin-left: 0;
+    margin-right: 0;
+    min-width: 1520px;
+    width: max-content;
+    overflow-x: visible;
+    overflow-y: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .admin-layout .trace-conversation-table {
+    width: 1520px;
+    min-width: 1520px;
+    table-layout: auto;
+  }
+
   .admin-layout .trace-list-table .ui-table-head,
   .admin-layout .trace-list-table .ui-table-cell {
     padding-left: var(--trace-space-16);

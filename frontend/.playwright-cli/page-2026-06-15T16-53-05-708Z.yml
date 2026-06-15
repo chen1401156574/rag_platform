@@ -1,0 +1,46 @@
+- generic [ref=e6]:
+  - region "平台能力概览" [ref=e7]:
+    - generic [ref=e8]:
+      - img "小桔充电 Logo" [ref=e9]
+      - generic [ref=e10]: 企业知识问答平台
+    - generic [ref=e11]:
+      - paragraph [ref=e12]: RAG Knowledge Hub
+      - heading "让知识问答可引用、可追溯、可运营" [level=1] [ref=e13]
+      - paragraph [ref=e14]: 面向员工的连续问答入口，也面向管理员提供知识库、入库任务、Prompt 与 Trace 的统一工作台。
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - strong [ref=e17]: 引用
+        - generic [ref=e18]: 文档来源清晰可点
+      - generic [ref=e19]:
+        - strong [ref=e20]: Trace
+        - generic [ref=e21]: 问答链路全程可查
+      - generic [ref=e22]:
+        - strong [ref=e23]: Admin
+        - generic [ref=e24]: 运营配置集中管理
+  - generic [ref=e25]:
+    - generic [ref=e26]:
+      - img "小桔充电 Logo" [ref=e27]
+      - generic [ref=e28]: 企业知识问答平台
+    - generic [ref=e29]:
+      - tablist [ref=e30]:
+        - generic [ref=e32]:
+          - tab "登录" [selected] [ref=e34] [cursor=pointer]
+          - tab "注册" [ref=e36] [cursor=pointer]
+      - tabpanel [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]: 欢迎回来
+          - generic [ref=e43]:
+            - generic "邮箱或用户名" [ref=e45]: "* 邮箱或用户名"
+            - generic [ref=e49]:
+              - textbox "* 邮箱或用户名" [ref=e50]:
+                - /placeholder: 请输入邮箱或用户名
+              - img [ref=e52]
+          - generic [ref=e56]:
+            - generic "密码" [ref=e58]: "* 密码"
+            - generic [ref=e62]:
+              - textbox "* 密码" [ref=e63]:
+                - /placeholder: 请输入密码
+              - img "eye-invisible" [ref=e65] [cursor=pointer]:
+                - img [ref=e66]
+          - button "登 录" [ref=e74] [cursor=pointer]:
+            - generic [ref=e75]: 登 录
