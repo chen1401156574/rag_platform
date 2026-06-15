@@ -16,6 +16,7 @@
 - [RAG 问答链路设计](design-docs/rag-chain.md)
 - [Prompt 地图](design-docs/prompt-map.md)
 - [图片与复杂文档解析增强方案](design-docs/image-complex-document-parsing.md)
+- [基于公司 Logo 的 UI 优化整体方向](design-docs/logo-driven-ui-optimization.md)
 - [系统架构](../ARCHITECTURE.md)
 - [当前计划](PLANS.md)
 
@@ -38,6 +39,7 @@
 ## 前端设计约束
 
 - 管理控制台采用工作台风格，避免营销式首页和装饰性内容。
+- 前端视觉升级应对齐公司 Logo 的绿色可信、橙色高效、青色链路、墨蓝专业体系，具体见 [基于公司 Logo 的 UI 优化整体方向](design-docs/logo-driven-ui-optimization.md)。
 - 表格页必须提供关键筛选、状态显示、分页、空态和错误态。
 - Trace、知识库、入库任务等排障页面应支持从列表进入详情，并保留关键 ID 的复制能力。
 - Chat 页面滚动应限制在主内容容器内，避免全局页面滚动影响输入框位置。

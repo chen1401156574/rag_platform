@@ -8,6 +8,7 @@
 - [RAG 问答链路设计](rag-chain.md)
 - [Prompt 地图](prompt-map.md)
 - [图片与复杂文档解析增强方案](image-complex-document-parsing.md)
+- [基于公司 Logo 的 UI 优化整体方向](logo-driven-ui-optimization.md)
 
 ## 相关入口
 
