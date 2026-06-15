@@ -40,6 +40,7 @@ export interface KnowledgeChunk {
   id: string;
   kbId?: string;
   docId: string;
+  esDocId?: string | null;
   chunkIndex?: number | null;
   content?: string | null;
   contentHash?: string | null;
@@ -48,6 +49,31 @@ export interface KnowledgeChunk {
   enabled?: number | null;
   createTime?: string | null;
   updateTime?: string | null;
+  docName?: string | null;
+  matchedByFallback?: boolean | null;
+}
+
+export interface RetrievalTestChunk {
+  rank: number;
+  chunkId: string;
+  content?: string | null;
+  score?: number | null;
+  similarity?: number | null;
+  vectorSimilarity?: number | null;
+  termSimilarity?: number | null;
+  highlight?: string | null;
+  docName?: string | null;
+  docId?: string | null;
+}
+
+export interface RetrievalTestResult {
+  question: string;
+  docId: string;
+  esDocId: string;
+  kbId: string;
+  collectionName: string;
+  topK: number;
+  records: RetrievalTestChunk[];
 }
 
 export interface KnowledgeDocumentSearchItem {
@@ -290,6 +316,16 @@ export const getChunks = async (
 ): Promise<KnowledgeChunk[]> => {
   const page = await getChunksPage(docId, params);
   return page.records || [];
+};
+
+export const testDocumentRetrieval = async (
+  docId: string,
+  payload: { question: string; topK?: number }
+): Promise<RetrievalTestResult> => {
+  return api.post<RetrievalTestResult, RetrievalTestResult>(
+    `/knowledge-base/docs/${docId}/retrieval-test`,
+    payload
+  );
 };
 
 export const createChunk = async (

@@ -7,6 +7,7 @@
 - [核心设计信念](core-beliefs.md)
 - [RAG 问答链路设计](rag-chain.md)
 - [Prompt 地图](prompt-map.md)
+- [图片与复杂文档解析增强方案](image-complex-document-parsing.md)
 
 ## 相关入口
 
@@ -19,4 +20,3 @@
 - [链路分析](../../plan/链路分析.md)
 - [问答链路流程图](../../plan/问答链路流程图.md)
 - [项目提示词清单](../../plan/项目提示词清单.md)
-

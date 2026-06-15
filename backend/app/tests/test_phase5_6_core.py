@@ -302,6 +302,48 @@ class KnowledgeRecordTests(unittest.TestCase):
         self.assertEqual(len(uid), 20)
         self.assertTrue(uid.isalnum())
 
+    def test_es_doc_id_uses_xxhash64(self):
+        self.assertEqual(knowledge_admin_rt._es_doc_id(""), "ef46db3751d8e999")
+
+    def test_chunk_record_maps_es_hit(self):
+        hit = {
+            "_id": "chunk-1",
+            "_source": {
+                "content_with_weight": "测试 Chunk 内容",
+                "doc_id": "es-doc-1",
+                "kb_id": "1",
+                "available_int": "1",
+                "create_time": "2026-06-14 10:00:00",
+            },
+        }
+        record = knowledge_admin_rt._chunk_record(hit, "admin-doc-1", "es-doc-1", 3)
+        self.assertEqual(record["id"], "chunk-1")
+        self.assertEqual(record["docId"], "admin-doc-1")
+        self.assertEqual(record["esDocId"], "es-doc-1")
+        self.assertEqual(record["chunkIndex"], 3)
+        self.assertEqual(record["enabled"], 1)
+        self.assertEqual(record["charCount"], len("测试 Chunk 内容"))
+        self.assertGreater(record["tokenCount"], 0)
+
+    def test_retrieval_hit_record_maps_scores(self):
+        record = knowledge_admin_rt._retrieval_hit_record(
+            {
+                "chunk_id": "chunk-1",
+                "content_with_weight": "命中内容",
+                "similarity": "0.83",
+                "vector_similarity": "0.76",
+                "term_similarity": "0.52",
+                "docnm_kwd": "example.pdf",
+                "doc_id": "es-doc-1",
+            },
+            1,
+        )
+        self.assertEqual(record["rank"], 1)
+        self.assertEqual(record["chunkId"], "chunk-1")
+        self.assertEqual(record["score"], 0.83)
+        self.assertEqual(record["vectorSimilarity"], 0.76)
+        self.assertEqual(record["termSimilarity"], 0.52)
+
 
 # ── Route mounting verification ──
 
@@ -345,6 +387,8 @@ class Phase5And6RouteMountingTests(unittest.TestCase):
             "/api/ragent/knowledge-base/{kb_id}/docs",
             "/api/ragent/knowledge-base/{kb_id}/documents",
             "/api/ragent/knowledge-base/docs/{doc_id}",
+            "/api/ragent/knowledge-base/docs/{doc_id}/chunks",
+            "/api/ragent/knowledge-base/docs/{doc_id}/retrieval-test",
         ]
         for path in essential_paths:
             self.assertIn(path, all_paths, f"Expected route {path} not found")

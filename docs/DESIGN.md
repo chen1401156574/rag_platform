@@ -15,6 +15,7 @@
 - [核心设计信念](design-docs/core-beliefs.md)
 - [RAG 问答链路设计](design-docs/rag-chain.md)
 - [Prompt 地图](design-docs/prompt-map.md)
+- [图片与复杂文档解析增强方案](design-docs/image-complex-document-parsing.md)
 - [系统架构](../ARCHITECTURE.md)
 - [当前计划](PLANS.md)
 
@@ -48,4 +49,3 @@
 - 新执行计划放到 `docs/exec-plans/active/`，并在 `docs/PLANS.md` 登记。
 - 完成的执行计划移到 `docs/exec-plans/completed/` 或在索引中标记完成。
 - 发现跨模块遗留问题时，登记到 `docs/exec-plans/tech-debt-tracker.md`。
-
