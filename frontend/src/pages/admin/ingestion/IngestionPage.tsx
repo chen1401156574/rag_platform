@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ClipboardList,
@@ -7,7 +7,8 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -48,6 +49,7 @@ import {
 import { getSystemSettings } from "@/services/settingsService";
 import { getErrorMessage } from "@/utils/error";
 import { RelativeTime } from "@/components/RelativeTime";
+import { cn } from "@/lib/utils";
 const PIPELINE_PAGE_SIZE = 10;
 const TASK_PAGE_SIZE = 10;
 
@@ -114,6 +116,14 @@ const truncateJson = (value: unknown, max = 120) => {
   return `${raw.slice(0, max)}...`;
 };
 
+const formatSize = (size?: number | null) => {
+  if (!size) return "-";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${parseFloat((size / 1024).toFixed(1))} KB`;
+  if (size < 1024 * 1024 * 1024) return `${parseFloat((size / 1024 / 1024).toFixed(1))} MB`;
+  return `${parseFloat((size / 1024 / 1024 / 1024).toFixed(1))} GB`;
+};
+
 const statusBadgeVariant = (status?: string | null) => {
   if (!status) return "outline";
   const normalized = status.toLowerCase();
@@ -130,6 +140,96 @@ const nodeStatusVariant = (status?: string | null) => {
   if (normalized === "failed") return "destructive";
   return "secondary";
 };
+
+interface FileDropZoneProps {
+  file: File | null;
+  maxFileSize: number;
+  onFileChange: (file: File | null) => void;
+}
+
+function FileDropZone({ file, maxFileSize, onFileChange }: FileDropZoneProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openPicker = () => fileInputRef.current?.click();
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={file ? `当前文件 ${file.name}，点击重新选择` : "选择或拖拽上传文件"}
+      className={cn(
+        "group flex min-h-[136px] cursor-pointer select-none flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-5 text-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+        isDragging
+          ? "border-primary bg-primary/5"
+          : "border-border bg-background hover:border-primary/60 hover:bg-primary/5",
+        file && !isDragging ? "border-primary/50 bg-primary/5" : ""
+      )}
+      onClick={openPicker}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openPicker();
+        }
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragLeave={(event) => {
+        const nextTarget = event.relatedTarget as Node | null;
+        if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+          setIsDragging(false);
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDragging(false);
+        onFileChange(event.dataTransfer.files[0] || null);
+      }}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={(event) => onFileChange(event.target.files?.[0] || null)}
+      />
+      {file ? (
+        <>
+          <FileUp className="h-8 w-8 text-primary" />
+          <div className="max-w-full px-2 text-sm font-medium text-foreground break-all">
+            {file.name}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {formatSize(file.size)} / 最大 {formatSize(maxFileSize)}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={(event) => {
+              event.stopPropagation();
+              onFileChange(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+            重新选择
+          </Button>
+        </>
+      ) : (
+        <>
+          <FileUp className="h-8 w-8 text-primary/80" />
+          <div className="text-sm font-medium text-foreground">拖拽文件到此处，或点击选择</div>
+          <div className="text-xs text-muted-foreground">
+            上传后进入入库通道，单文件最大 {formatSize(maxFileSize)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 const pipelineSchema = z.object({
   name: z.string().min(1, "请输入流水线名称").max(60, "名称不能超过60个字符"),
@@ -2040,9 +2140,10 @@ function TaskDialog({ open, pipelineOptions, onOpenChange, onSubmit, onUpload }:
                 <FormItem>
                   <FormLabel>本地文件</FormLabel>
                   <FormControl>
-                    <Input
-                      type="file"
-                      onChange={(event) => setLocalFile(event.target.files?.[0] || null)}
+                    <FileDropZone
+                      file={localFile}
+                      maxFileSize={maxFileSize}
+                      onFileChange={setLocalFile}
                     />
                   </FormControl>
                 </FormItem>
@@ -2201,11 +2302,13 @@ function UploadDialog({ open, pipelineOptions, onOpenChange, onSubmit }: UploadD
           </div>
           <div>
             <label className="text-sm font-medium">文件</label>
-            <Input
-              type="file"
-              className="mt-2"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
-            />
+            <div className="mt-2">
+              <FileDropZone
+                file={file}
+                maxFileSize={maxFileSize}
+                onFileChange={setFile}
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>

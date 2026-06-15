@@ -1,13 +1,62 @@
 .ant-btn-color-primary.ant-btn-variant-text {
-  --ant-color-link: var(
-    --ant-color-primary
-  ); //  antd 错误地将 text/primary 颜色设为了 ant-color-link
+  --ant-color-link: var(--ant-color-primary);
+}
+
+.ant-btn-primary {
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector,
+.ant-picker {
+  border-color: var(--neutral-200);
+  color: var(--brand-ink-900);
+}
+
+.ant-input:hover,
+.ant-input-affix-wrapper:hover,
+.ant-select-selector:hover,
+.ant-picker:hover {
+  border-color: var(--neutral-300) !important;
+}
+
+.ant-input:focus,
+.ant-input-affix-wrapper-focused,
+.ant-select-focused .ant-select-selector,
+.ant-picker-focused {
+  border-color: var(--brand-green-700) !important;
+  box-shadow: 0 0 0 3px rgba(0, 122, 54, 0.14) !important;
 }
 
 .ant-dropdown-menu {
-  color: white;
-  background-color: black;
-  --ant-color-bg-elevated: black;
-  --ant-color-text: white;
-  --ant-control-item-bg-hover: rgba(255, 255, 255, 0.3);
+  color: var(--brand-ink-900);
+  background-color: var(--neutral-000);
+  border: 1px solid var(--neutral-200);
+  box-shadow: 0 14px 34px rgba(23, 32, 27, 0.12);
+  --ant-color-bg-elevated: var(--neutral-000);
+  --ant-color-text: var(--brand-ink-900);
+  --ant-control-item-bg-hover: var(--brand-green-050);
+}
+
+.ant-modal-content,
+.ant-drawer-content {
+  border: 1px solid var(--neutral-200);
+  box-shadow: 0 18px 46px rgba(23, 32, 27, 0.14);
+}
+
+.ant-modal-header,
+.ant-drawer-header {
+  border-bottom-color: var(--neutral-100);
+}
+
+.ant-modal-title,
+.ant-drawer-title {
+  color: var(--brand-ink-900);
+  font-weight: 700;
+}
+
+.ant-table-wrapper .ant-table {
+  border-radius: 10px;
 }

@@ -36,34 +36,39 @@ export function Nav() {
     () => [
       {
         key: '1',
-        label: '历史',
+        label: '历史会话',
         children: (
           <div>
-            {session.list?.map((item) => (
-              <div
-                className="base-layout-nav__item"
-                key={item.session_id}
-                onClick={() => {
-                  localStorage.setItem(CHAT_SESSION_STORAGE_KEY, item.session_id)
-                  navigate('/chat/', {
-                    state: {
-                      sessionId: item.session_id,
-                      selectedAt: Date.now(),
-                    },
-                  })
-                }}
-              >
-                <div className="time">
-                  {dayjs(item.created_at).format('HH:mm YYYY/MM/DD')}
-                </div>
-                <div className="title">{item.session_name}</div>
-              </div>
-            ))}
+            {session.list?.length ? (
+              session.list.map((item) => (
+                <button
+                  type="button"
+                  className="base-layout-nav__item"
+                  key={item.session_id}
+                  onClick={() => {
+                    localStorage.setItem(CHAT_SESSION_STORAGE_KEY, item.session_id)
+                    navigate('/chat/', {
+                      state: {
+                        sessionId: item.session_id,
+                        selectedAt: Date.now(),
+                      },
+                    })
+                  }}
+                >
+                  <span className="time">
+                    {dayjs(item.created_at).format('HH:mm YYYY/MM/DD')}
+                  </span>
+                  <span className="title">{item.session_name}</span>
+                </button>
+              ))
+            ) : (
+              <div className="base-layout-nav__empty">暂无历史会话</div>
+            )}
           </div>
         ),
       },
     ],
-    [session.list],
+    [navigate, session.list],
   )
 
   return (

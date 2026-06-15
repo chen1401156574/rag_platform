@@ -212,12 +212,12 @@ export function KnowledgeListPage() {
   const getCollectionBadgeClass = (name?: string) => {
     const value = (name || "").toLowerCase();
     if (value.includes("biz")) {
-      return "border-blue-200 bg-blue-50 text-blue-700";
+      return "border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-green-800)]";
     }
     if (value.includes("group")) {
-      return "border-purple-200 bg-purple-50 text-purple-700";
+      return "border-[var(--brand-cyan-100)] bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]";
     }
-    return "border-slate-200 bg-slate-100 text-slate-600";
+    return "border-[var(--neutral-200)] bg-[var(--neutral-100)] text-[var(--neutral-600)]";
   };
 
   const handleRename = async () => {

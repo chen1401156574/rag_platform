@@ -32,6 +32,7 @@ import {
 } from "@/components/admin/SimpleLineChart";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CSS_VAR_COLORS } from "@/styles/brandTokens";
 import {
   getDashboardOverview,
   getDashboardPerformance,
@@ -111,6 +112,18 @@ const EMPTY_TRENDS: DashboardTrendBundle = {
   activeUsers: null,
   latency: null,
   quality: null
+};
+
+const DASHBOARD_STATUS_COLOR: Record<MetricTone, string> = {
+  good: CSS_VAR_COLORS.green700,
+  warning: CSS_VAR_COLORS.warningText,
+  bad: CSS_VAR_COLORS.error
+};
+
+const DASHBOARD_RING_COLOR: Record<MetricTone, string> = {
+  good: CSS_VAR_COLORS.green600,
+  warning: CSS_VAR_COLORS.yellow500,
+  bad: CSS_VAR_COLORS.error
 };
 
 // ============================================================================
@@ -274,8 +287,9 @@ const useDashboardData = () => {
       console.error(err);
       setError("数据加载失败");
     } finally {
-      if (requestIdRef.current !== requestId) return;
-      setLoading(false);
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -322,7 +336,12 @@ const useHealthStatus = (performance: DashboardPerformance | null, overview: Das
 // ============================================================================
 
 const DashCard = ({ children, className }: { children: ReactNode; className?: string }) => (
-    <div className={cn("rounded-2xl bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]", className)}>
+    <div
+      className={cn(
+        "rounded-lg border border-[var(--neutral-200)] bg-white p-5 shadow-[0_1px_2px_rgba(23,32,27,0.04)]",
+        className
+      )}
+    >
       {children}
     </div>
 );
@@ -332,7 +351,7 @@ const CardTitle = ({ children }: { children: ReactNode }) => (
 );
 
 const LoadingBlock = ({ className }: { className?: string }) => (
-    <div className={cn("animate-pulse rounded-lg bg-slate-100", className)} />
+    <div className={cn("animate-pulse rounded-lg bg-[var(--neutral-100)]", className)} />
 );
 
 // ============================================================================
@@ -340,10 +359,22 @@ const LoadingBlock = ({ className }: { className?: string }) => (
 // ============================================================================
 
 const HEALTH_CONFIG: Record<HealthStatus, { bg: string; text: string; label: string }> = {
-  healthy: { bg: "bg-emerald-100", text: "text-emerald-700", label: "运行正常" },
-  attention: { bg: "bg-amber-100", text: "text-amber-700", label: "需要关注" },
+  healthy: {
+    bg: "bg-[var(--brand-green-050)]",
+    text: "text-[var(--brand-green-800)]",
+    label: "运行正常"
+  },
+  attention: {
+    bg: "bg-[var(--brand-yellow-100)]",
+    text: "text-[var(--brand-ink-800)]",
+    label: "需要关注"
+  },
   critical: { bg: "bg-red-100", text: "text-red-700", label: "风险偏高" },
-  unknown: { bg: "bg-slate-100", text: "text-slate-500", label: "暂无数据" }
+  unknown: {
+    bg: "bg-[var(--neutral-100)]",
+    text: "text-[var(--neutral-600)]",
+    label: "暂无数据"
+  }
 };
 
 const DashboardHeader = ({
@@ -360,7 +391,7 @@ const DashboardHeader = ({
   onTimeWindowChange: (window: DashboardTimeWindow) => void;
 }) => (
     <header className="mb-3 flex items-center justify-between">
-      <h1 className="text-4xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+      <h1 className="text-2xl font-semibold text-[var(--brand-ink-900)]">Dashboard</h1>
 
       <div className="flex items-center gap-3">
         <div className="inline-flex rounded-lg bg-white p-1 shadow-sm">
@@ -372,8 +403,8 @@ const DashboardHeader = ({
                   className={cn(
                       "rounded-md px-3 py-1.5 text-sm font-medium transition-all",
                       timeWindow === opt.value
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-500 hover:text-slate-700"
+                          ? "bg-[var(--brand-green-700)] text-white"
+                          : "text-[var(--neutral-600)] hover:text-[var(--brand-ink-700)]"
                   )}
               >
                 {opt.label}
@@ -382,7 +413,7 @@ const DashboardHeader = ({
         </div>
 
         <div className="flex items-center gap-2 text-sm text-slate-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-green-600)]" />
           <span>{formatLastUpdated(lastUpdated)}</span>
         </div>
 
@@ -391,7 +422,7 @@ const DashboardHeader = ({
             size="icon"
             onClick={onRefresh}
             disabled={loading}
-            className="h-9 w-9 rounded-lg border-slate-200 bg-white text-slate-500 hover:text-slate-700"
+            className="h-9 w-9 rounded-lg border-[var(--neutral-200)] bg-white text-[var(--neutral-600)] hover:border-[var(--brand-green-100)] hover:bg-[var(--brand-green-050)] hover:text-[var(--brand-green-800)]"
         >
           <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
         </Button>
@@ -419,18 +450,18 @@ const KPICardItem = ({ value, label, change, icon, iconBg, iconColor }: KPICardP
 
   const changeColor =
       showChange && ((isUp && changePositive) || (!isUp && !changePositive))
-          ? "text-emerald-600"
+          ? "text-[var(--brand-green-700)]"
           : "text-red-500";
 
   return (
-      <div className="rounded-xl bg-slate-50 p-4">
+      <div className="rounded-lg bg-[var(--neutral-050)] p-4">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-2xl font-bold tracking-tight text-slate-900">{value}</p>
             <p className="mt-1 text-sm text-slate-500">{label}</p>
           </div>
           <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl"
+              className="flex h-10 w-10 items-center justify-center rounded-lg"
               style={{ backgroundColor: iconBg, color: iconColor }}
           >
             {icon}
@@ -481,32 +512,32 @@ const KPISection = ({ overview }: { overview: DashboardOverview | null }) => {
       label: "活跃用户",
       change: toChange(kpis?.activeUsers.deltaPct),
       icon: <Activity className="h-5 w-5" />,
-      iconBg: "#DBEAFE",
-      iconColor: "#2563EB"
+      iconBg: CSS_VAR_COLORS.green050,
+      iconColor: CSS_VAR_COLORS.green700
     },
     {
       value: formatNumber(kpis?.sessions24h.value),
       label: "会话数",
       change: toChange(kpis?.sessions24h.deltaPct),
       icon: <MessageSquare className="h-5 w-5" />,
-      iconBg: "#E0E7FF",
-      iconColor: "#4F46E5"
+      iconBg: CSS_VAR_COLORS.cyan100,
+      iconColor: CSS_VAR_COLORS.cyan700
     },
     {
       value: formatNumber(kpis?.messages24h.value),
       label: "消息数",
       change: toChange(kpis?.messages24h.deltaPct),
       icon: <Zap className="h-5 w-5" />,
-      iconBg: "#FEF3C7",
-      iconColor: "#D97706"
+      iconBg: CSS_VAR_COLORS.orange100,
+      iconColor: CSS_VAR_COLORS.orange700
     },
     {
       value: sessionDepth === null ? "-" : formatRatio(sessionDepth),
       label: "会话深度（条/会话）",
       change: undefined,
       icon: <BarChart3 className="h-5 w-5" />,
-      iconBg: "#E0F2FE",
-      iconColor: "#0284C7"
+      iconBg: CSS_VAR_COLORS.green050,
+      iconColor: CSS_VAR_COLORS.green600
     }
   ];
 
@@ -727,15 +758,15 @@ const SimpleAreaChart = ({
           >
             <defs>
               <linearGradient id="trafficGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.02" />
+                <stop offset="0%" stopColor={CSS_VAR_COLORS.green600} stopOpacity="0.18" />
+                <stop offset="100%" stopColor={CSS_VAR_COLORS.green600} stopOpacity="0.02" />
               </linearGradient>
             </defs>
             <path d={areaPath} fill="url(#trafficGradient)" />
             <path
                 d={linePath}
                 fill="none"
-                stroke="#3B82F6"
+                stroke={CSS_VAR_COLORS.green600}
                 strokeWidth="2"
                 vectorEffect="non-scaling-stroke"
             />
@@ -751,7 +782,7 @@ const SimpleAreaChart = ({
                 />
                 {/* 圆点 */}
                 <div
-                    className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500 bg-white shadow-sm"
+                    className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--brand-green-600)] bg-white shadow-sm"
                     style={{ left: tooltip.x, top: tooltip.y }}
                 />
                 {/* 标签 */}
@@ -764,7 +795,7 @@ const SimpleAreaChart = ({
                 >
                   <div className="font-medium">{tooltip.label}</div>
                   <div className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm bg-blue-400" />
+                    <span className="h-2 w-2 rounded-sm bg-[var(--brand-green-600)]" />
                     <span>
                   {valueLabel}: {tooltip.value}
                 </span>
@@ -887,7 +918,7 @@ const TrendChartItem = ({
 }) => {
   if (loading) {
     return (
-        <div className="rounded-xl bg-slate-50 p-4">
+        <div className="rounded-lg bg-[var(--neutral-050)] p-4">
           <LoadingBlock className="mb-3 h-4 w-24" />
           <LoadingBlock className="h-48 w-full" />
         </div>
@@ -895,7 +926,7 @@ const TrendChartItem = ({
   }
 
   return (
-      <div className="rounded-xl bg-slate-50 p-4">
+      <div className="rounded-lg bg-[var(--neutral-050)] p-4">
         <div className="mb-1 text-xs font-medium text-slate-500">{title}</div>
         {yAxisLabel && <p className="mb-2 text-[11px] text-slate-400">{yAxisLabel}</p>}
         <div className="h-48">
@@ -983,19 +1014,18 @@ const TrendSection = ({
 // AI Performance
 // ============================================================================
 
-const STATUS_COLOR: Record<MetricTone, string> = {
-  good: "#10B981",
-  warning: "#F59E0B",
-  bad: "#EF4444"
-};
-
 const QUALITY_SNAPSHOT_META = [
-  { label: "错误率", toneClass: "bg-red-500", valueClass: "text-red-600", target: "阈值 ≤5%" },
-  { label: "无知识率", toneClass: "bg-amber-500", valueClass: "text-amber-600", target: "阈值 ≤20%" },
+  { label: "错误率", toneClass: "bg-[var(--error)]", valueClass: "text-red-700", target: "阈值 ≤5%" },
+  {
+    label: "无知识率",
+    toneClass: "bg-[var(--brand-yellow-500)]",
+    valueClass: "text-[var(--brand-ink-800)]",
+    target: "阈值 ≤20%"
+  },
   {
     label: "慢响应率（>20s）",
-    toneClass: "bg-sky-500",
-    valueClass: "text-sky-600",
+    toneClass: "bg-[var(--brand-cyan-700)]",
+    valueClass: "text-[var(--brand-cyan-700)]",
     target: "阈值 ≤20%"
   }
 ] as const;
@@ -1016,7 +1046,7 @@ const MetricRow = ({
       <Icon className="h-4 w-4 text-slate-400" />
       {label}
     </span>
-      <span className="text-sm font-semibold tabular-nums" style={{ color: STATUS_COLOR[status] }}>
+      <span className="text-sm font-semibold tabular-nums" style={{ color: DASHBOARD_STATUS_COLOR[status] }}>
       {value}
     </span>
     </div>
@@ -1036,7 +1066,7 @@ const QualitySnapshot = ({
   ];
 
   return (
-      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3.5">
+      <div className="mt-4 rounded-lg border border-[var(--neutral-100)] bg-[var(--neutral-050)] p-3.5">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs font-medium text-slate-600">质量快照（柱状）</p>
           <span className="text-[11px] text-slate-400">{windowLabel}</span>
@@ -1048,7 +1078,7 @@ const QualitySnapshot = ({
             const barHeight = `${Math.max(normalized, hasValue ? 4 : 0)}%`;
             return (
                 <div key={item.label} className="space-y-1.5">
-                  <div className="flex h-24 items-end rounded-md border border-slate-200 bg-white p-1.5">
+                  <div className="flex h-24 items-end rounded-md border border-[var(--neutral-200)] bg-white p-1.5">
                     <div
                         className={cn(
                             "w-full rounded-sm transition-[height] duration-500",
@@ -1090,7 +1120,7 @@ const EfficiencySnapshot = ({
   ];
 
   return (
-      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3.5">
+      <div className="mt-4 rounded-lg border border-[var(--neutral-100)] bg-[var(--neutral-050)] p-3.5">
         <div className="mb-1.5 flex items-center justify-between">
           <p className="text-xs font-medium text-slate-600">运营效率</p>
           <span className="text-[11px] text-slate-400">{windowLabel}</span>
@@ -1126,7 +1156,9 @@ const AIPerformanceCard = ({
 }) => {
   const healthCfg = HEALTH_CONFIG[health];
   const successRate = performance?.successRate ?? 0;
-  const ringColor = successRate >= 95 ? "#10B981" : successRate >= 85 ? "#F59E0B" : "#EF4444";
+  const successTone: MetricTone = successRate >= 95 ? "good" : successRate >= 85 ? "warning" : "bad";
+  const ringColor = DASHBOARD_RING_COLOR[successTone];
+  const ringTextColor = DASHBOARD_STATUS_COLOR[successTone];
 
   const p95LatencyStatus = getLatencyStatus(performance?.p95LatencyMs);
 
@@ -1148,7 +1180,7 @@ const AIPerformanceCard = ({
         <div className="flex justify-center py-3">
           <div className="relative">
             <svg className="-rotate-90" viewBox="0 0 120 120" width="120" height="120">
-              <circle cx="60" cy="60" r={radius} fill="none" stroke="#F1F5F9" strokeWidth={8} />
+              <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--neutral-100)" strokeWidth={8} />
               <circle
                   cx="60"
                   cy="60"
@@ -1163,7 +1195,7 @@ const AIPerformanceCard = ({
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold" style={{ color: ringColor }}>
+            <span className="text-2xl font-bold" style={{ color: ringTextColor }}>
               {formatPercent(successRate)}
             </span>
               <span className="mt-0.5 text-xs text-slate-400">成功率</span>
@@ -1210,15 +1242,15 @@ const TYPE_ICON: Record<InsightCardData["type"], typeof Info> = {
 
 const TYPE_STYLE: Record<InsightCardData["type"], string> = {
   anomaly: "bg-red-50 text-red-600",
-  trend: "bg-blue-50 text-blue-600",
-  recommendation: "bg-amber-50 text-amber-600"
+  trend: "bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]",
+  recommendation: "bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)]"
 };
 
 const InsightCard = ({ item }: { item: InsightCardData }) => {
   const Icon = TYPE_ICON[item.type];
 
   return (
-      <div className="rounded-xl bg-slate-50 p-3.5">
+      <div className="rounded-lg bg-[var(--neutral-050)] p-3.5">
         <div className="mb-2 flex items-center justify-between">
         <span
             className={cn(

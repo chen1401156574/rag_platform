@@ -1,27 +1,50 @@
 .com-sender {
-  background-color: rgba(white, 0.7);
-  border: 1px solid #e6e6e6;
-  border-radius: 15px;
+  max-width: 920px;
+  margin: 0 auto;
+  background-color: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--neutral-200);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(23, 32, 27, 0.07);
+  transition:
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast);
+
+  &:focus-within {
+    border-color: var(--brand-green-700);
+    box-shadow: 0 0 0 3px rgba(0, 122, 54, 0.14);
+  }
 
   .ant-input {
     background: transparent;
     border: none;
-    padding: 14px 16px;
+    max-height: 168px;
+    padding: 16px 18px;
     box-shadow: none;
+    color: var(--brand-ink-900);
+    font-size: 15px;
+    line-height: 1.65;
+
+    &::placeholder {
+      color: var(--neutral-500);
+    }
   }
 
   .com-sender__actions {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    padding: 14px 16px;
-    padding-top: 0;
+    gap: 12px;
+    padding: 0 16px 14px;
 
     .com-sender__action--contract {
-      min-width: 108px;
+      min-width: 120px;
       max-width: 200px;
-      font-size: 16px;
-      color: #333;
+      height: 36px;
+      font-size: 14px;
+      color: var(--brand-ink-900);
       overflow: hidden;
+      border: 1px solid var(--neutral-200);
+      background: var(--neutral-025);
 
       .document-name {
         overflow: hidden;
@@ -31,23 +54,45 @@
     }
 
     .com-sender__action--send {
-      min-width: 108px;
-      font-weight: bold;
-      font-size: 16px;
-      background: linear-gradient(
-        88.94deg,
-        #0862fe -30.91%,
-        #639bff 46.27%,
-        #0862fe 125%
-      ) !important;
-      border: 2px solid #c7dfff;
-      box-shadow: 0px 0px 4px 0px rgba(255, 255, 255, 0.8) inset;
-
+      min-width: 104px;
+      height: 40px;
+      font-weight: 700;
+      font-size: 15px;
+      background: var(--brand-orange-700) !important;
+      border: 1px solid var(--brand-orange-700);
+      box-shadow: none;
       position: relative;
+
+      &:hover,
+      &:focus-visible {
+        background: var(--brand-orange-800) !important;
+        border-color: var(--brand-orange-800);
+      }
 
       img {
         width: 7px;
         height: 10px;
+        filter: brightness(0) invert(1);
+      }
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .com-sender {
+    border-radius: 12px;
+
+    .com-sender__actions {
+      flex-wrap: wrap;
+
+      .com-sender__actions-left,
+      .com-sender__actions-right {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .com-sender__action--send {
+        min-width: 112px;
       }
     }
   }

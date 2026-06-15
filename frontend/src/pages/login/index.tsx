@@ -1,4 +1,5 @@
 import * as api from '@/api'
+import brandLogo from '@/assets/logo-brand.png'
 import { Background } from '@/layout/base/background'
 import { userActions, userState } from '@/store/user'
 import { decodeJwtSubject } from '@/utils/auth'
@@ -16,9 +17,9 @@ const IconUser = (
     viewBox="0 0 24 24"
     fill="none"
     stroke="rgba(0, 0, 0, 0.45)"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
   >
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
     <circle cx="12" cy="7" r="4"></circle>
@@ -210,14 +211,51 @@ export default function Login() {
       style={{ minHeight: '100vh' }}
     >
       <Background />
-      <div className={styles['login-card']}>
-        <Tabs
-          className={styles['login-tabs']}
-          items={tabs}
-          activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as 'login' | 'register')}
-          destroyInactiveTabPane
-        />
+      <div className={styles['login-shell']}>
+        <section
+          className={styles['login-copy']}
+          aria-label="平台能力概览"
+        >
+          <div className={styles['login-copy__brand']}>
+            <img src={brandLogo} alt="小桔充电 Logo" />
+            <span>企业知识问答平台</span>
+          </div>
+          <div>
+            <p className={styles['login-copy__eyebrow']}>RAG Knowledge Hub</p>
+            <h1>让知识问答可引用、可追溯、可运营</h1>
+            <p className={styles['login-copy__desc']}>
+              面向员工的连续问答入口，也面向管理员提供知识库、入库任务、Prompt 与 Trace 的统一工作台。
+            </p>
+          </div>
+          <div className={styles['login-copy__metrics']}>
+            <div>
+              <strong>引用</strong>
+              <span>文档来源清晰可点</span>
+            </div>
+            <div>
+              <strong>Trace</strong>
+              <span>问答链路全程可查</span>
+            </div>
+            <div>
+              <strong>Admin</strong>
+              <span>运营配置集中管理</span>
+            </div>
+          </div>
+        </section>
+
+        <div className={styles['login-card']}>
+          <div className={styles['login-brand']}>
+            <img src={brandLogo} alt="小桔充电 Logo" />
+            <span>企业知识问答平台</span>
+          </div>
+          <Tabs
+            className={styles['login-tabs']}
+            items={tabs}
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as 'login' | 'register')}
+            destroyOnHidden
+          />
+        </div>
       </div>
     </Flex>
   )

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { CSS_VAR_COLORS } from "@/styles/brandTokens";
 
 export type ChartXAxisMode = "hour" | "date";
 export type ChartYAxisType = "number" | "duration" | "percent";
@@ -22,12 +23,12 @@ export type ChartThreshold = {
 };
 
 const TONE_COLORS: Record<ChartTone, string> = {
-  primary: "#2563eb",
-  success: "#059669",
-  warning: "#d97706",
-  critical: "#dc2626",
-  info: "#0891b2",
-  danger: "#dc2626"
+  primary: CSS_VAR_COLORS.green600,
+  success: CSS_VAR_COLORS.green700,
+  warning: CSS_VAR_COLORS.warningText,
+  critical: CSS_VAR_COLORS.error,
+  info: CSS_VAR_COLORS.cyan700,
+  danger: CSS_VAR_COLORS.error
 };
 
 function formatX(ts: number, mode: ChartXAxisMode) {
@@ -110,21 +111,21 @@ export function SimpleLineChart({
   if (chart.empty) {
     return (
       <div className="flex h-full min-h-32 items-center justify-center rounded-lg border border-dashed border-slate-200 text-sm text-slate-400">
-        No trend data
+        暂无趋势数据
       </div>
     );
   }
 
   return (
     <div className="h-full w-full overflow-hidden">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" className="h-full w-full">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="趋势折线图" className="h-full w-full">
         <rect x="0" y="0" width={width} height={height} fill="transparent" />
         {yTicks.map((tick) => {
           const y = yScale(tick);
           return (
             <g key={tick}>
-              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />
-              <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#94a3b8">
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke={CSS_VAR_COLORS.neutral200} strokeWidth="1" />
+              <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="11" fill={CSS_VAR_COLORS.neutral600}>
                 {formatY(tick, yAxisType)}
               </text>
             </g>
@@ -171,7 +172,7 @@ export function SimpleLineChart({
           ))
         )}
         {xTicks.map((point) => (
-          <text key={point.ts} x={xScale(point.ts)} y={height - 10} textAnchor="middle" fontSize="11" fill="#94a3b8">
+          <text key={point.ts} x={xScale(point.ts)} y={height - 10} textAnchor="middle" fontSize="11" fill={CSS_VAR_COLORS.neutral600}>
             {formatX(point.ts, xAxisMode)}
           </text>
         ))}

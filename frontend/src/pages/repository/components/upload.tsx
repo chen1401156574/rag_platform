@@ -91,15 +91,17 @@ export default forwardRef<RepositoryUploadRef, UploadProps>(
           fileList={fileList}
           onChange={(info) => setFileList(info.fileList)}
         >
-          <img src={IconUpload} />
-          <p
-            className="ant-upload-text"
-            style={{
-              color: '#666',
-            }}
-          >
+          <img
+            src={IconUpload}
+            alt=""
+            aria-hidden="true"
+            className={styles['repository-upload__icon']}
+          />
+          <p className={styles['repository-upload__text']}>
             拖拽文件到此 或{' '}
-            <span style={{ color: '#409EFF' }}>点击上传</span>
+            <span className={styles['repository-upload__action']}>
+              点击上传
+            </span>
           </p>
         </Upload.Dragger>
 

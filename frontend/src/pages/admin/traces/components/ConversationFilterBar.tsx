@@ -211,10 +211,10 @@ export function ConversationFilterBar({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-          <span className="text-xs font-medium text-slate-500">状态</span>
+        <div className="flex items-center gap-3 rounded-md border border-[var(--neutral-200)] bg-[var(--neutral-050)] px-3 py-2">
+          <span className="text-xs font-medium text-[var(--neutral-600)]">状态</span>
           {CONVERSATION_STATUS_OPTIONS.map((item) => (
-            <label key={item.value} className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
+            <label key={item.value} className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--brand-ink-700)]">
               <Checkbox
                 checked={filters.status.includes(item.value)}
                 onCheckedChange={(checked) => toggleStatus(item.value, checked === true)}
@@ -235,13 +235,13 @@ export function ConversationFilterBar({
           <RotateCcw className="mr-2 h-4 w-4" />
           重置
         </Button>
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-[var(--neutral-500)]">
           已启用 {activeConversationFilterCount(filters)} 个非默认条件
         </span>
       </div>
 
       {advancedOpen && (
-        <div className="mt-3 grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-3 grid grid-cols-1 gap-3 border-t border-[var(--neutral-100)] pt-3 md:grid-cols-2 xl:grid-cols-5">
           <div>
             <Label className="mb-1.5 block text-xs text-slate-500">意图编码</Label>
             <Input
@@ -307,14 +307,14 @@ export function ConversationFilterBar({
       )}
 
       {chips.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--neutral-100)] pt-3">
           {chips.map((chip) => (
-            <Badge key={chip.key} variant="outline" className="gap-1 bg-slate-50 text-slate-600">
+            <Badge key={chip.key} variant="outline" className="gap-1 border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-ink-700)]">
               <span className="max-w-[420px] truncate">{chip.label}</span>
               <button
                 type="button"
                 onClick={() => onChange(clearConversationFilter(filters, chip.key))}
-                className="rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                className="rounded-full p-0.5 text-[var(--neutral-500)] hover:bg-[var(--brand-green-100)] hover:text-[var(--brand-green-800)]"
                 aria-label={`清除${chip.label}`}
               >
                 <X className="h-3 w-3" />

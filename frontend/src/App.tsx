@@ -2,6 +2,7 @@ import { Router } from '@/router'
 import { App as AntdApp, ConfigProvider, Spin } from 'antd'
 import zhCN from 'antd/es/locale/zh_CN'
 import { useCallback, useRef, useState } from 'react'
+import { BRAND_COLORS } from '@/styles/brandTokens'
 function App() {
   return (
     <ConfigProvider
@@ -9,7 +10,17 @@ function App() {
       theme={{
         cssVar: true,
         token: {
-          colorPrimary: '#1F70FE',
+          colorPrimary: BRAND_COLORS.green700,
+          colorInfo: BRAND_COLORS.cyan700,
+          colorSuccess: BRAND_COLORS.green700,
+          colorWarning: BRAND_COLORS.yellow500,
+          colorError: BRAND_COLORS.error,
+          colorLink: BRAND_COLORS.green700,
+          colorBgLayout: BRAND_COLORS.neutral050,
+          colorText: BRAND_COLORS.ink900,
+          colorTextSecondary: BRAND_COLORS.ink700,
+          colorBorder: BRAND_COLORS.neutral200,
+          borderRadius: 8,
         },
       }}
     >

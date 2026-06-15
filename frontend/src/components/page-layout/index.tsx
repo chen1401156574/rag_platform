@@ -2,12 +2,12 @@ import classNames from 'classnames'
 import React, { PropsWithChildren, ReactNode } from 'react'
 import './index.scss'
 
-interface ComPageLayoutProps extends PropsWithChildren<{
+type ComPageLayoutProps = PropsWithChildren<{
   className?: string
   right?: ReactNode
   sender?: ReactNode
   contentRef?: React.RefObject<HTMLDivElement>
-}> {}
+}>
 
 export default function ComPageLayout(props: ComPageLayoutProps) {
   const { children, className, right, sender, contentRef, ...rest } = props

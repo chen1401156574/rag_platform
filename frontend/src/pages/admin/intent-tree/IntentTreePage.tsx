@@ -159,6 +159,20 @@ const resolveKindBadge = (value?: number | null) => {
   return "outline";
 };
 
+const resolveLevelBadgeClass = (value?: number | null) => {
+  const level = value ?? 0;
+  if (level === 0) return "border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-green-800)]";
+  if (level === 1) return "border-[var(--brand-cyan-100)] bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]";
+  return "border-[var(--brand-yellow-500)]/30 bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)]";
+};
+
+const resolveKindBadgeClass = (value?: number | null) => {
+  const kind = value ?? 0;
+  if (kind === 1) return "border-[var(--brand-cyan-100)] bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]";
+  if (kind === 2) return "border-[var(--brand-orange-100)] bg-[var(--brand-orange-100)] text-[var(--brand-orange-700)]";
+  return "border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-green-800)]";
+};
+
 export function IntentTreePage() {
   const [searchParams] = useSearchParams();
   const [tree, setTree] = useState<IntentNodeTree[]>([]);
@@ -271,8 +285,10 @@ export function IntentTreePage() {
         <div key={node.intentCode}>
           <div
               className={cn(
-                  "group flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 transition-colors",
-                  isSelected ? "bg-slate-100 text-slate-900" : "hover:bg-slate-50"
+                  "group flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 transition-colors focus-within:ring-2 focus-within:ring-[rgba(0,122,54,0.24)]",
+                  isSelected
+                      ? "border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-ink-900)]"
+                      : "border-transparent text-[var(--brand-ink-700)] hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-050)]"
               )}
               style={{ paddingLeft: `${depth * 16 + 12}px` }}
               onClick={() => setSelectedCode(node.intentCode)}
@@ -281,7 +297,7 @@ export function IntentTreePage() {
               {hasChildren ? (
                   <button
                       type="button"
-                      className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--neutral-600)] hover:bg-[var(--brand-green-050)] hover:text-[var(--brand-green-800)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(0,122,54,0.24)]"
                       onClick={(event) => {
                         event.stopPropagation();
                         setExpandedMap((prev) => ({
@@ -297,12 +313,12 @@ export function IntentTreePage() {
                   <span className="h-5 w-5" />
               )}
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-foreground">{node.name}</span>
-                <Badge variant="outline">{resolveLevelLabel(node.level)}</Badge>
-                <Badge variant={resolveKindBadge(node.kind)}>{resolveKindLabel(node.kind)}</Badge>
+                <span className="text-sm font-medium text-[var(--brand-ink-900)]">{node.name}</span>
+                <Badge variant="outline" className={resolveLevelBadgeClass(node.level)}>{resolveLevelLabel(node.level)}</Badge>
+                <Badge variant={resolveKindBadge(node.kind)} className={resolveKindBadgeClass(node.kind)}>{resolveKindLabel(node.kind)}</Badge>
               </div>
             </div>
-            <div className="hidden items-center gap-2 text-xs text-muted-foreground group-hover:flex">
+            <div className="hidden items-center gap-2 text-xs text-[var(--neutral-600)] group-hover:flex group-focus-within:flex">
               <span className="truncate">{node.intentCode}</span>
             </div>
           </div>
@@ -360,12 +376,19 @@ export function IntentTreePage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h2 className="text-lg font-semibold text-foreground">{selectedNode.name}</h2>
-                          <Badge variant="outline">{resolveLevelLabel(selectedNode.level)}</Badge>
-                          <Badge variant={resolveKindBadge(selectedNode.kind)}>
+                          <h2 className="text-lg font-semibold text-[var(--brand-ink-900)]">{selectedNode.name}</h2>
+                          <Badge variant="outline" className={resolveLevelBadgeClass(selectedNode.level)}>{resolveLevelLabel(selectedNode.level)}</Badge>
+                          <Badge variant={resolveKindBadge(selectedNode.kind)} className={resolveKindBadgeClass(selectedNode.kind)}>
                             {resolveKindLabel(selectedNode.kind)}
                           </Badge>
-                          <Badge variant={selectedNode.enabled === 0 ? "secondary" : "default"}>
+                          <Badge
+                            variant={selectedNode.enabled === 0 ? "outline" : "default"}
+                            className={
+                              selectedNode.enabled === 0
+                                ? "border-[var(--neutral-200)] bg-[var(--neutral-100)] text-[var(--neutral-600)]"
+                                : "border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-green-800)]"
+                            }
+                          >
                             {selectedNode.enabled === 0 ? "停用" : "启用"}
                           </Badge>
                         </div>
@@ -427,7 +450,7 @@ export function IntentTreePage() {
                             return <span className="text-sm text-muted-foreground">暂无示例</span>;
                           }
                           return examples.map((item) => (
-                              <Badge key={item} variant="secondary">
+                              <Badge key={item} variant="secondary" className="border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-ink-700)]">
                                 {item}
                               </Badge>
                           ));
@@ -821,8 +844,8 @@ function IntentNodeDialog({
                   />
               )}
 
-              <details className="rounded-lg border px-4 py-3" open>
-                <summary className="cursor-pointer text-sm font-medium text-foreground">
+              <details className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-025)] px-4 py-3" open>
+                <summary className="cursor-pointer text-sm font-medium text-[var(--brand-ink-900)]">
                   描述与示例
                 </summary>
                 <div className="mt-3 space-y-4">
@@ -856,8 +879,8 @@ function IntentNodeDialog({
                 </div>
               </details>
 
-              <details className="rounded-lg border px-4 py-3">
-                <summary className="cursor-pointer text-sm font-medium text-foreground">
+              <details className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-025)] px-4 py-3">
+                <summary className="cursor-pointer text-sm font-medium text-[var(--brand-ink-900)]">
                   Prompt 配置
                 </summary>
                 <div className="mt-3 space-y-4">
@@ -919,8 +942,8 @@ function IntentNodeDialog({
                 </div>
               </details>
 
-              <details className="rounded-lg border px-4 py-3">
-                <summary className="cursor-pointer text-sm font-medium text-foreground">
+              <details className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-025)] px-4 py-3">
+                <summary className="cursor-pointer text-sm font-medium text-[var(--brand-ink-900)]">
                   高级设置
                 </summary>
                 <div className="mt-3 grid gap-4 md:grid-cols-2">

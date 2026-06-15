@@ -162,21 +162,21 @@ export function RagTracePage() {
       title: "会话数",
       value: String(stats.conversationTotal),
       icon: <MessageSquare className="h-4 w-4" />,
-      tone: "indigo"
+      tone: "primary"
     },
     {
       key: "turns",
       title: "当前页轮次",
       value: String(stats.currentTurnCount),
       icon: <Route className="h-4 w-4" />,
-      tone: "cyan"
+      tone: "link"
     },
     {
       key: "failed",
       title: "当前页失败会话",
       value: String(stats.failedCount),
       icon: <Activity className="h-4 w-4" />,
-      tone: "rose"
+      tone: "danger"
     },
     {
       key: "avg",
@@ -184,7 +184,7 @@ export function RagTracePage() {
       value: avgDurationMetric.value,
       unit: avgDurationMetric.unit,
       icon: <Clock3 className="h-4 w-4" />,
-      tone: "emerald"
+      tone: "success"
     },
     {
       key: "ttft",
@@ -192,7 +192,7 @@ export function RagTracePage() {
       value: avgTtftMetric.value,
       unit: avgTtftMetric.unit,
       icon: <RefreshCw className="h-4 w-4" />,
-      tone: "sky"
+      tone: "link"
     }
   ];
 

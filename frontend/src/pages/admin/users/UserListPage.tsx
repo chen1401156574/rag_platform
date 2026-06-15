@@ -248,7 +248,7 @@ export function UserListPage() {
                           <Avatar
                             name={user.username || "用户"}
                             src={user.avatar?.trim() || undefined}
-                            className="h-9 w-9 border-slate-200 bg-indigo-50 text-xs font-semibold text-indigo-600"
+                            className="h-9 w-9 border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-xs font-semibold text-[var(--brand-green-800)]"
                           />
                           <div>
                             <div className="font-medium text-slate-900">{user.username || "-"}</div>
@@ -282,7 +282,7 @@ export function UserListPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className={enabled ? "text-amber-600 hover:text-amber-600" : "text-emerald-600 hover:text-emerald-600"}
+                            className={enabled ? "text-[var(--brand-ink-800)] hover:text-[var(--brand-ink-900)]" : "text-[var(--brand-green-700)] hover:text-[var(--brand-green-800)]"}
                             disabled={isProtected}
                             onClick={() => handleToggleStatus(user)}
                           >

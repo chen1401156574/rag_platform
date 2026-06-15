@@ -1,14 +1,17 @@
 .chat-message-result {
   .chat-message-result__think {
-    color: #8b8b8b;
-    border-left: 2px solid #e5e5e5;
-    padding-left: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    padding-left: 12px;
+    color: var(--neutral-600);
+    border-left: 2px solid var(--brand-cyan-700);
+    font-size: 13px;
+    line-height: 1.6;
   }
+
   .chat-message-result__md {
     :global {
       .refrence-token {
-        color: var(--ant-color-primary);
+        color: var(--brand-green-700);
         font-weight: bold;
       }
     }
@@ -21,7 +24,7 @@
 
     .date {
       margin-right: 4px;
-      color: var(--ant-color-primary);
+      color: var(--neutral-600);
       font-size: 12px;
     }
   }
@@ -35,14 +38,25 @@
     max-width: 100%;
 
     .item {
-      border-radius: 40px;
-      border: 1px solid transparent;
-      box-shadow: 0px 2px 12px 0px rgba(206, 215, 218, 1.18);
+      min-height: 36px;
       max-width: 100%;
-
       display: flex;
       justify-content: flex-start;
       align-items: center;
+      border: 1px solid var(--brand-green-100);
+      border-radius: 999px;
+      background: var(--neutral-000);
+      box-shadow: 0 2px 8px rgba(23, 32, 27, 0.05);
+      transition:
+        border-color var(--motion-fast),
+        background-color var(--motion-fast),
+        color var(--motion-fast);
+
+      &:hover,
+      &:focus-visible {
+        border-color: var(--brand-green-700);
+        background: var(--brand-green-050);
+      }
 
       .text {
         text-align: left;
@@ -50,13 +64,13 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        color: #333;
+        color: var(--brand-ink-900);
         font-size: 12px;
       }
 
       .arrow {
         flex-shrink: 0;
-        color: #999;
+        color: var(--neutral-500);
         font-size: 10px;
       }
     }
@@ -69,17 +83,18 @@
   .chat-message-result__clarify {
     margin-top: 12px;
     padding: 14px 16px;
-    background: #f6f8fa;
-    border-radius: 10px;
-    border: 1px solid #e8ecf0;
+    background: var(--brand-cyan-100);
+    border-radius: 8px;
+    border: 1px solid rgba(15, 122, 130, 0.2);
 
     .clarify-header {
       display: flex;
       align-items: center;
       gap: 6px;
       margin-bottom: 10px;
-      color: #555;
+      color: var(--brand-cyan-800);
       font-size: 13px;
+      font-weight: 600;
     }
 
     .clarify-icon {
@@ -95,7 +110,7 @@
 
     .clarify-item {
       margin-bottom: 6px;
-      color: #333;
+      color: var(--brand-ink-900);
       font-size: 14px;
       line-height: 1.6;
     }

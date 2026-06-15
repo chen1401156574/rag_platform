@@ -1,65 +1,76 @@
-.base-layout-footer {
+﻿.base-layout-footer {
   flex-shrink: 0;
-  align-self: center;
   display: flex;
-  justify-content: center;
-  position: relative;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid var(--neutral-200);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+}
 
-  .base-layout-footer__bg {
-    width: 170px;
-    height: 200px;
+.base-layout-footer__avatar {
+  flex-shrink: 0;
+  border: 1px solid var(--brand-green-100);
+  background: var(--brand-green-050);
+  color: var(--brand-green-800);
+  font-weight: 700;
+}
+
+.base-layout-footer__body {
+  min-width: 0;
+  flex: 1;
+
+  .username,
+  .role {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .base-layout-footer__main {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    color: white;
+  .username {
+    color: var(--brand-ink-900);
+    font-size: 13px;
+    font-weight: 700;
+  }
 
-    .header {
-      flex-shrink: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
+  .role {
+    margin-top: 2px;
+    color: var(--neutral-600);
+    font-size: 11px;
+  }
+}
 
-      .avatar {
-        background-color: #e9eff5;
-        border-color: white;
-        color: var(--ant-color-primary);
+.base-layout-footer__logout {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--neutral-600);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-out),
+    color var(--motion-fast) var(--motion-ease-out);
 
-        .ant-avatar-string {
-          font-size: 28px;
-          font-weight: bold;
-        }
-      }
+  &:hover {
+    background: var(--error-050);
+    color: var(--error);
+  }
 
-      .edit {
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-        &:hover {
-          background-color: rgba(white, 0.2);
-        }
-      }
-    }
+  &:focus-visible {
+    outline: 2px solid rgba(217, 45, 32, 0.22);
+    outline-offset: 2px;
+  }
+}
 
-    .body {
-      flex-grow: 1;
-      overflow: auto;
-    }
-
-    .footer {
-      flex-shrink: 0;
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-    }
+@media (max-width: 900px) {
+  .base-layout-footer {
+    display: none;
   }
 }

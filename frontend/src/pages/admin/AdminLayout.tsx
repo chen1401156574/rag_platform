@@ -8,7 +8,6 @@ import {
   ClipboardList,
   Database,
   GitBranch,
-  GitFork,
   Layers,
   LayoutDashboard,
   Lightbulb,
@@ -18,10 +17,12 @@ import {
   KeyRound,
   Search,
   Settings,
+  ShieldCheck,
   Upload,
   Users,
   FolderKanban,
-  Workflow
+  Workflow,
+  type LucideIcon
 } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "@/components/ui/button";
@@ -44,12 +45,13 @@ import {
   type KnowledgeDocumentSearchItem
 } from "@/services/knowledgeService";
 import { Avatar } from "@/components/common/Avatar";
+import brandLogo from "@/assets/logo-brand.png";
 import "@/admin.css";
 
 type MenuChild = {
   path: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
   search?: string;
 };
 
@@ -57,7 +59,7 @@ type MenuItem = {
   id?: string;
   path: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
   search?: string;
   children?: MenuChild[];
 };
@@ -178,7 +180,6 @@ export function AdminLayout() {
     newPassword: "",
     confirmPassword: ""
   });
-  const [starCount, setStarCount] = useState<number | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ ingestion: true, intent: true });
   const [kbQuery, setKbQuery] = useState("");
   const [kbOptions, setKbOptions] = useState<KnowledgeBase[]>([]);
@@ -193,25 +194,6 @@ export function AdminLayout() {
     await logout();
     navigate("/login");
   };
-
-  useEffect(() => {
-    let active = true;
-    fetch("https://api.github.com/repos/nageoffer/ragent")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!active) return;
-        const count = typeof data?.stargazers_count === "number" ? data.stargazers_count : null;
-        setStarCount(count);
-      })
-      .catch(() => {
-        if (active) {
-          setStarCount(null);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!searchFocused) return;
@@ -253,6 +235,22 @@ export function AdminLayout() {
       window.clearTimeout(handle);
     };
   }, [kbQuery, searchFocused]);
+
+  useEffect(() => {
+    const handleGlobalSearchShortcut = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        setSearchFocused(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalSearchShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalSearchShortcut);
+    };
+  }, []);
 
   const breadcrumbs = useMemo(() => {
     const segments = location.pathname.split("/").filter(Boolean);
@@ -317,13 +315,6 @@ export function AdminLayout() {
   const avatarUrl = user?.avatar?.trim();
   const showAvatar = Boolean(avatarUrl);
   const roleLabel = user?.role === "admin" ? "管理员" : "成员";
-  const starLabel = useMemo(() => {
-    if (starCount === null) return "--";
-    if (starCount < 1000) return String(starCount);
-    const rounded = Math.round((starCount / 1000) * 10) / 10;
-    const text = String(rounded).replace(/\.0$/, "");
-    return `${text}k`;
-  }, [starCount]);
   const isIngestionActive = location.pathname.startsWith("/admin/ingestion");
   const isIntentActive =
     location.pathname.startsWith("/admin/intent-tree") || location.pathname.startsWith("/admin/intent-list");
@@ -438,7 +429,9 @@ export function AdminLayout() {
       <aside className={cn("admin-sidebar", collapsed && "admin-sidebar--collapsed")}>
         <div className="admin-sidebar__brand">
           <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-            <div className="admin-sidebar__logo">R</div>
+            <div className={cn("admin-sidebar__logo", !collapsed && "admin-sidebar__logo--wide")}>
+              <img src={brandLogo} alt="小桔充电 Logo" />
+            </div>
             {!collapsed && (
               <div className="min-w-0">
                 <h1 className="admin-sidebar__title">Ragent AI 管理后台</h1>
@@ -619,7 +612,8 @@ export function AdminLayout() {
                   autoCorrect="off"
                   autoCapitalize="off"
                   spellCheck={false}
-                  placeholder="筛选知识库..."
+                  placeholder="搜索知识库或文档"
+                  aria-label="搜索知识库或文档"
                   className="pl-10 pr-16"
                 />
                 <span className="admin-topbar-kbd">Ctrl K</span>
@@ -689,30 +683,21 @@ export function AdminLayout() {
                 <MessageSquare className="h-4 w-4" />
                 返回聊天
               </Button>
-              <a
-                href="https://github.com/nageoffer/ragent"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                aria-label="打开 GitHub 仓库"
-              >
-                <GitFork className="h-4 w-4" />
-                <span className="font-medium">Star</span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                  {starLabel}
-                </span>
-              </a>
+              <div className="admin-topbar-status" aria-label="系统运行状态：在线">
+                <ShieldCheck className="h-4 w-4" />
+                <span className="hidden md:inline">系统在线</span>
+              </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-600 shadow-sm"
+                    className="flex items-center gap-2 rounded-full border border-[var(--neutral-200)] bg-white px-2.5 py-1.5 text-sm text-[var(--neutral-600)] shadow-sm"
                     aria-label="用户菜单"
                   >
                     <Avatar
                       name={user?.username || "管理员"}
                       src={showAvatar ? avatarUrl : undefined}
-                      className="h-8 w-8 border-slate-200 bg-indigo-50 text-xs font-semibold text-indigo-600"
+                      className="h-8 w-8 border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-xs font-semibold text-[var(--brand-green-800)]"
                     />
                     <span className="hidden sm:inline">{user?.username || "管理员"}</span>
                     <ChevronDown className="h-4 w-4 text-slate-400" />

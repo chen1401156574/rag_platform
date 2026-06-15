@@ -3,15 +3,53 @@
     .ant-upload-drag {
       --ant-color-fill-alter: transparent;
       height: 200px;
+      border-color: var(--brand-green-100);
+      border-radius: 12px;
+      background: var(--neutral-025);
+      transition:
+        border-color var(--motion-fast) var(--motion-ease-out),
+        background-color var(--motion-fast) var(--motion-ease-out);
+    }
+
+    .ant-upload-drag:not(.ant-upload-disabled):hover,
+    .ant-upload-drag-hover:not(.ant-upload-disabled) {
+      border-color: var(--brand-green-700);
+      background: var(--brand-green-050);
     }
 
     .ant-upload-list-item-progress {
       display: none;
     }
+
+    .ant-upload-list {
+      margin-top: 12px;
+    }
+
+    .ant-upload-list-item {
+      border-radius: 8px;
+      color: var(--brand-ink-800);
+    }
+  }
+
+  .repository-upload__icon {
+    width: 56px;
+    height: 56px;
+    opacity: 0.9;
+  }
+
+  .repository-upload__text {
+    margin: 12px 0 0;
+    color: var(--brand-ink-700);
+  }
+
+  .repository-upload__action {
+    color: var(--brand-green-700);
+    font-weight: 600;
   }
 
   .repository-upload__desc {
+    margin-top: 10px;
     font-size: 12px;
-    color: #999;
+    color: var(--neutral-600);
   }
 }

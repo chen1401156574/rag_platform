@@ -28,14 +28,14 @@ export default {
         "chat-assistant": "hsl(var(--chat-assistant))"
       },
       fontFamily: {
-        display: ["'Space Grotesk'", "ui-sans-serif", "system-ui"],
-        body: ["'DM Sans'", "ui-sans-serif", "system-ui"],
-        mono: ["'JetBrains Mono'", "ui-monospace", "SFMono-Regular"]
+        display: ["PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "ui-sans-serif", "system-ui"],
+        body: ["PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "ui-sans-serif", "system-ui"],
+        mono: ["'JetBrains Mono'", "SFMono-Regular", "Consolas", "ui-monospace"]
       },
       boxShadow: {
-        soft: "0 24px 60px -30px rgba(10, 10, 15, 0.65)",
-        glow: "0 0 0 1px rgba(59, 130, 246, 0.2), 0 16px 40px rgba(59, 130, 246, 0.25)",
-        neon: "0 0 30px rgba(59, 130, 246, 0.35)"
+        soft: "0 16px 40px -28px rgba(23, 32, 27, 0.42)",
+        glow: "0 0 0 1px rgba(0, 122, 54, 0.16), 0 12px 28px rgba(0, 122, 54, 0.18)",
+        neon: "0 0 22px rgba(15, 122, 130, 0.24)"
       },
       keyframes: {
         "fade-up": {

@@ -23,7 +23,7 @@ type IRepository = API.Repository & {
 }
 
 export default function Index() {
-  const { data, refresh } = useRequest(async () => {
+  const { data, refresh, loading } = useRequest(async () => {
     const { data } = await api.repository.list()
     return data?.map(
       (item, index) =>
@@ -145,24 +145,37 @@ export default function Index() {
       <div className={styles['repository-page__body']}>
         <div className={styles['header']}>
           <Input
+            className={styles['repository-page__search']}
             placeholder="搜索文件"
             prefix={<img src={IconSearch} />}
-            style={{ width: 210 }}
           />
 
-          <Button type="primary" onClick={() => setOpenUpload(true)}>
+          <Button
+            className={styles['repository-page__upload-button']}
+            type="primary"
+            onClick={() => setOpenUpload(true)}
+          >
             <PlusOutlined />
             添加文档
           </Button>
         </div>
 
         <Table<IRepository>
+          className={styles['repository-page__table']}
           rowKey="id"
           columns={columns}
           dataSource={data}
           rowSelection={rowSelection}
           scroll={scroll}
-          pagination={false}
+          loading={loading}
+          pagination={{
+            pageSize: 10,
+            hideOnSinglePage: true,
+            showSizeChanger: false,
+          }}
+          locale={{
+            emptyText: '暂无文档，请先上传知识库文件',
+          }}
         />
       </div>
 

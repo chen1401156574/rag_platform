@@ -94,14 +94,14 @@ export const clamp = (value: number, min: number, max: number): number => {
 
 export const nodeTypeChipClass = (type?: string | null): string => {
   const normalized = (type || "").trim().toUpperCase();
-  if (normalized === "ROOT") return "bg-indigo-100 text-indigo-700";
-  if (normalized === "USER_TTFT") return "bg-rose-100 text-rose-700";
-  if (normalized === "LLM_TTFT") return "bg-emerald-100 text-emerald-700";
-  if (normalized === "LLM_PROVIDER") return "bg-orange-100 text-orange-700";
-  if (normalized === "LLM_ROUTING") return "bg-amber-100 text-amber-700";
-  if (normalized === "GUIDANCE") return "bg-violet-100 text-violet-700";
-  if (normalized === "INTENT" || normalized === "INTENTCLASSIFY") return "bg-sky-100 text-sky-700";
-  if (normalized === "REWRITE") return "bg-teal-100 text-teal-700";
+  if (normalized === "ROOT") return "bg-[var(--brand-green-100)] text-[var(--brand-green-800)]";
+  if (normalized === "USER_TTFT") return "bg-red-100 text-red-700";
+  if (normalized === "LLM_TTFT") return "bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]";
+  if (normalized === "LLM_PROVIDER") return "bg-[var(--brand-orange-100)] text-[var(--brand-orange-700)]";
+  if (normalized === "LLM_ROUTING") return "bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)]";
+  if (normalized === "GUIDANCE") return "bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)]";
+  if (normalized === "INTENT" || normalized === "INTENTCLASSIFY") return "bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]";
+  if (normalized === "REWRITE") return "bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]";
   if (
       normalized === "RETRIEVE" ||
       normalized === "RAG_NODE" ||
@@ -109,7 +109,7 @@ export const nodeTypeChipClass = (type?: string | null): string => {
       normalized === "RETRIEVALQUERYBUILD" ||
       normalized === "ESHYBRIDSEARCH" ||
       normalized === "RERANKCHUNKS"
-  ) return "bg-blue-100 text-blue-700";
+  ) return "bg-[var(--brand-green-100)] text-[var(--brand-green-800)]";
   if (
       normalized === "USERQUESTIONRECEIVED" ||
       normalized === "AUTHLOADSETTINGS" ||
@@ -118,7 +118,7 @@ export const nodeTypeChipClass = (type?: string | null): string => {
       normalized === "CLARIFYRESPONSE" ||
       normalized === "QUICKPARSELOAD" ||
       normalized === "CONTEXTASSEMBLE"
-  ) return "bg-violet-100 text-violet-700";
+  ) return "bg-[var(--neutral-100)] text-[var(--brand-ink-700)]";
   if (
       normalized === "PROMPTBUILD" ||
       normalized === "LLMSTREAMSTART" ||
@@ -127,17 +127,17 @@ export const nodeTypeChipClass = (type?: string | null): string => {
       normalized === "LLMFINALANSWER" ||
       normalized === "RECOMMENDQUESTIONS" ||
       normalized === "LLMCALL"
-  ) return "bg-emerald-100 text-emerald-700";
+  ) return "bg-[var(--brand-green-100)] text-[var(--brand-green-800)]";
   if (
       normalized === "SSEDOCUMENTSSENT" ||
       normalized === "SSEENDSENT" ||
       normalized === "SSEERRORSENT" ||
       normalized === "PERSISTMESSAGE" ||
       normalized === "SESSIONTITLEUPDATE"
-  ) return "bg-stone-100 text-stone-700";
-  if (normalized === "TITLE_GEN") return "bg-stone-100 text-stone-700";
-  if (normalized.startsWith("MCP")) return "bg-cyan-100 text-cyan-700";
-  return "bg-slate-100 text-slate-600";
+  ) return "bg-[var(--neutral-100)] text-[var(--neutral-700)]";
+  if (normalized === "TITLE_GEN") return "bg-[var(--neutral-100)] text-[var(--neutral-700)]";
+  if (normalized.startsWith("MCP")) return "bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]";
+  return "bg-[var(--neutral-100)] text-[var(--neutral-600)]";
 };
 
 const NODE_NAME_DISPLAY: Record<string, string> = {

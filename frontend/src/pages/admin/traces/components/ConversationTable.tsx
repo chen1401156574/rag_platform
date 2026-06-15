@@ -104,7 +104,7 @@ export function ConversationTable({
               </TableHeader>
               <TableBody>
                 {conversations.map((item) => (
-                  <TableRow key={item.sessionId} className="hover:bg-slate-50/80">
+                  <TableRow key={item.sessionId} className="hover:bg-[var(--brand-green-050)]">
                     <TableCell>
                       <div className="min-w-0 space-y-1">
                         <div className="flex items-center gap-2">
@@ -113,7 +113,7 @@ export function ConversationTable({
                           </span>
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1 rounded border border-slate-200 px-1.5 py-0.5 font-mono text-[11px] text-slate-500 hover:bg-slate-100"
+                            className="inline-flex items-center gap-1 rounded border border-[var(--neutral-200)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--neutral-600)] hover:bg-[var(--brand-green-050)]"
                             onClick={() => copyText(item.sessionId, "Session Id")}
                           >
                             {truncateMiddle(item.sessionId)}

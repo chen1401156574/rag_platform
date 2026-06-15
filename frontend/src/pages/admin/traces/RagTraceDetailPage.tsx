@@ -66,12 +66,12 @@ const copyToClipboard = (text: string, label: string) => {
 type StatusColor = { dot: string; bar: string };
 
 const STATUS_COLORS: Record<string, StatusColor> = {
-  success: { dot: "bg-emerald-500", bar: "bg-emerald-400" },
-  failed: { dot: "bg-red-500", bar: "bg-red-400" },
-  running: { dot: "bg-amber-500", bar: "bg-amber-400" },
-  timeout: { dot: "bg-red-500", bar: "bg-red-400" },
-  clarify_needed: { dot: "bg-amber-500", bar: "bg-amber-400" },
-  default: { dot: "bg-slate-300", bar: "bg-slate-300" }
+  success: { dot: "bg-[var(--brand-green-600)]", bar: "bg-[var(--brand-green-600)]" },
+  failed: { dot: "bg-[var(--error)]", bar: "bg-[var(--error)]" },
+  running: { dot: "bg-[var(--brand-cyan-700)]", bar: "bg-[var(--brand-cyan-700)]" },
+  timeout: { dot: "bg-[var(--error)]", bar: "bg-[var(--error)]" },
+  clarify_needed: { dot: "bg-[var(--brand-yellow-500)]", bar: "bg-[var(--brand-yellow-500)]" },
+  default: { dot: "bg-[var(--neutral-300)]", bar: "bg-[var(--neutral-300)]" }
 };
 
 const getStatusColors = (status?: string | null): StatusColor => {
@@ -93,18 +93,18 @@ function MetricItem({
   variant?: "default" | "success" | "error" | "warning" | "primary";
 }) {
   const styles = {
-    default: "text-slate-600",
-    success: "text-emerald-600",
+    default: "text-[var(--neutral-600)]",
+    success: "text-[var(--brand-green-700)]",
     error: "text-red-600",
-    warning: "text-amber-600",
-    primary: "text-blue-600"
+    warning: "text-[var(--brand-ink-800)]",
+    primary: "text-[var(--brand-green-700)]"
   };
 
   return (
       <div className="flex items-center gap-2 px-4 py-2">
         <Icon className={cn("h-4 w-4", styles[variant])} />
         <span className={cn("text-lg font-semibold", styles[variant])}>{value}</span>
-        <span className="text-xs text-slate-500">{label}</span>
+        <span className="text-xs text-[var(--neutral-600)]">{label}</span>
       </div>
   );
 }
@@ -112,15 +112,15 @@ function MetricItem({
 function TimeScale({ totalMs }: { totalMs: number }) {
   const ticks = [0, 25, 50, 75, 100];
   return (
-      <div className="relative h-6 border-b border-slate-200">
+      <div className="relative h-6 border-b border-[var(--neutral-200)]">
         {ticks.map((percent) => (
             <div
                 key={percent}
                 className="absolute top-0 bottom-0 flex flex-col items-center"
                 style={{ left: `${percent}%`, transform: "translateX(-50%)" }}
             >
-              <div className="w-px h-2 bg-slate-300" />
-              <span className="text-[10px] text-slate-400 mt-0.5">
+              <div className="w-px h-2 bg-[var(--neutral-300)]" />
+              <span className="text-[10px] text-[var(--neutral-500)] mt-0.5">
             {formatDuration((totalMs * percent) / 100)}
           </span>
             </div>
@@ -155,16 +155,26 @@ function WaterfallRow({
   const colors = getStatusColors(nodeStatus);
   const depth = isRoot ? 0 : Math.min(Math.max(node.depthValue - 1, 0), 6);
   const clickable = !!onSelect;
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!clickable) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect?.();
+    }
+  };
 
   return (
       <div
           onClick={onSelect}
+          onKeyDown={handleKeyDown}
+          role={clickable ? "button" : undefined}
+          tabIndex={clickable ? 0 : undefined}
           className={cn(
-              "grid grid-cols-[minmax(180px,1fr)_120px_2fr_100px] gap-4 px-4 py-2.5 transition-colors group",
-              clickable && "cursor-pointer hover:bg-slate-50/80",
-              isRoot && "bg-indigo-50/40 border-b border-indigo-100",
-              isTopSlowest && !isSelected && !isRoot && "bg-amber-50/40",
-              isSelected && "bg-blue-50/60 ring-1 ring-inset ring-blue-200"
+              "grid grid-cols-[minmax(180px,1fr)_120px_2fr_100px] gap-4 px-4 py-2.5 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(0,122,54,0.24)] focus-visible:ring-inset",
+              clickable && "cursor-pointer hover:bg-[var(--brand-green-050)]",
+              isRoot && "bg-[var(--brand-green-050)] border-b border-[var(--brand-green-100)]",
+              isTopSlowest && !isSelected && !isRoot && "bg-[var(--brand-yellow-100)]/55",
+              isSelected && "bg-[var(--brand-green-050)] ring-1 ring-inset ring-[var(--brand-green-100)]"
           )}
       >
         <div className="flex items-center gap-1.5 min-w-0">
@@ -176,7 +186,7 @@ function WaterfallRow({
                       <span
                           key={idx}
                           className={cn(
-                              "w-4 border-slate-200",
+                              "w-4 border-[var(--neutral-200)]",
                               "border-l",
                               isLast && "border-b"
                           )}
@@ -193,14 +203,14 @@ function WaterfallRow({
           <span
               className={cn(
                   "truncate",
-                  isRoot ? "text-sm font-semibold text-indigo-900" : "text-sm text-slate-700"
+                  isRoot ? "text-sm font-semibold text-[var(--brand-green-900)]" : "text-sm text-[var(--brand-ink-700)]"
               )}
               title={nodeDisplayName}
           >
             {nodeDisplayName}
           </span>
           {isTopSlowest && !isRoot && (
-              <Zap className="h-3 w-3 text-amber-500 shrink-0" />
+              <Zap className="h-3 w-3 text-[var(--brand-yellow-500)] shrink-0" />
           )}
         </div>
 
@@ -214,11 +224,11 @@ function WaterfallRow({
         </div>
 
         <div className="flex items-center">
-          <div className="relative w-full h-6 bg-slate-50 rounded overflow-hidden">
+          <div className="relative w-full h-6 bg-[var(--neutral-050)] rounded overflow-hidden">
             {[25, 50, 75].map(p => (
                 <div
                     key={p}
-                    className="absolute top-0 bottom-0 w-px bg-slate-200"
+                    className="absolute top-0 bottom-0 w-px bg-[var(--neutral-200)]"
                     style={{ left: `${p}%` }}
                 />
             ))}
@@ -239,10 +249,10 @@ function WaterfallRow({
         </div>
 
         <div className="text-right">
-          <p className="text-sm font-medium text-slate-700">
+          <p className="text-sm font-medium text-[var(--brand-ink-700)]">
             {formatDuration(node.resolvedDurationMs)}
           </p>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-[10px] text-[var(--neutral-500)]">
             @{formatDuration(node.offsetMs)}
           </p>
         </div>
@@ -266,7 +276,7 @@ function NodeDetailCard({
         <CardHeader className="py-3 px-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <CardTitle className="text-sm font-medium text-slate-700 truncate" title={displayName}>
+              <CardTitle className="text-sm font-medium text-[var(--brand-ink-700)] truncate" title={displayName}>
                 {displayName}
               </CardTitle>
               <Badge variant={statusBadgeVariant(node.status)} className="text-xs">
@@ -283,7 +293,7 @@ function NodeDetailCard({
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                className="h-7 px-2 text-slate-500 hover:text-slate-800"
+                className="h-7 px-2 text-[var(--neutral-600)] hover:text-[var(--brand-ink-900)]"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -310,31 +320,41 @@ function NodeDetailCard({
               </div>
           )}
           {"inputJson" in node && node.inputJson && (
-              <div>
-                <p className="text-xs font-medium text-slate-500 mb-1">输入数据</p>
-                <pre className="text-xs bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all text-slate-700">
-                  {tryPrettyJson(node.inputJson)}
-                </pre>
-              </div>
+              <JsonDetailBlock label="输入数据" raw={node.inputJson} />
           )}
           {"outputJson" in node && node.outputJson && (
-              <div>
-                <p className="text-xs font-medium text-slate-500 mb-1">输出数据</p>
-                <pre className="text-xs bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all text-slate-700">
-                  {tryPrettyJson(node.outputJson)}
-                </pre>
-              </div>
+              <JsonDetailBlock label="输出数据" raw={node.outputJson} />
           )}
           {node.extraData && (
-              <div>
-                <p className="text-xs font-medium text-slate-500 mb-1">额外数据</p>
-                <pre className="text-xs bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all text-slate-700">
-                  {tryPrettyJson(node.extraData)}
-                </pre>
-              </div>
+              <JsonDetailBlock label="额外数据" raw={node.extraData} />
           )}
         </CardContent>
       </Card>
+  );
+}
+
+function JsonDetailBlock({ label, raw }: { label: string; raw: string }) {
+  const formatted = tryPrettyJson(raw);
+
+  return (
+      <div className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)]">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--neutral-200)] px-3 py-2">
+          <p className="text-xs font-medium text-[var(--neutral-600)]">{label}</p>
+          <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-[var(--brand-green-700)] hover:bg-[var(--brand-green-050)] hover:text-[var(--brand-green-800)]"
+              onClick={() => copyToClipboard(formatted, label)}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            复制
+          </Button>
+        </div>
+        <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-all px-3 py-2 text-xs leading-5 text-[var(--brand-ink-700)]">
+          {formatted}
+        </pre>
+      </div>
   );
 }
 
@@ -354,17 +374,17 @@ function DetailField({
   const highlightClass = highlight === "error"
       ? "text-red-600 font-medium"
       : highlight === "primary"
-          ? "text-blue-600 font-medium"
-          : "text-slate-700";
+          ? "text-[var(--brand-green-700)] font-medium"
+          : "text-[var(--brand-ink-700)]";
   return (
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-slate-500 shrink-0">{label}</span>
+        <span className="text-[var(--neutral-600)] shrink-0">{label}</span>
         <span
             className={cn(
                 "truncate",
                 mono && "font-mono",
                 highlightClass,
-                copyable && "cursor-pointer hover:text-blue-600 transition-colors"
+                copyable && "cursor-pointer hover:text-[var(--brand-green-700)] transition-colors"
             )}
             title={value}
             onClick={copyable ? () => copyToClipboard(value, label) : undefined}
@@ -372,7 +392,7 @@ function DetailField({
           {value}
         </span>
         {copyable && (
-            <Copy className="h-3 w-3 text-slate-300 shrink-0" />
+            <Copy className="h-3 w-3 text-[var(--neutral-300)] shrink-0" />
         )}
       </div>
   );
@@ -719,12 +739,12 @@ function EndToEndTraceCard({
   ];
 
   return (
-      <Card className="border-slate-200">
+      <Card className="border-[var(--neutral-200)]">
         <CardHeader className="py-4 px-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Crosshair className="h-4 w-4 text-blue-600" />
-              <CardTitle className="text-sm font-semibold text-slate-800">
+              <Crosshair className="h-4 w-4 text-[var(--brand-green-700)]" />
+              <CardTitle className="text-sm font-semibold text-[var(--brand-ink-800)]">
                 端到端问答链路
               </CardTitle>
             </div>
@@ -733,13 +753,13 @@ function EndToEndTraceCard({
                   <span
                       key={item.label}
                       className={cn(
-                          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs",
-                          item.variant === "success" && "bg-emerald-50 text-emerald-700 border border-emerald-100",
-                          item.variant === "warning" && "bg-amber-50 text-amber-700 border border-amber-100",
+                          "inline-flex items-center gap-1 rounded border px-2 py-1 text-xs",
+                          item.variant === "success" && "border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-green-800)]",
+                          item.variant === "warning" && "border-[var(--brand-yellow-500)]/30 bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)]",
                           item.variant === "error" && "bg-red-50 text-red-700 border border-red-100"
                       )}
                   >
-                    <span className="text-slate-500">{item.label}</span>
+                    <span className="text-[var(--neutral-600)]">{item.label}</span>
                     <span className="font-medium">{item.value}</span>
                   </span>
               ))}
@@ -748,34 +768,34 @@ function EndToEndTraceCard({
         </CardHeader>
         <CardContent className="px-5 pb-5 pt-0 space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-              <div className="text-xs font-medium text-slate-500 mb-1">用户原始问题</div>
-              <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">
+            <div className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] p-3">
+              <div className="text-xs font-medium text-[var(--neutral-600)] mb-1">用户原始问题</div>
+              <div className="text-sm text-[var(--brand-ink-800)] whitespace-pre-wrap break-words">
                 {truncateText(mergeInput?.original_question || run.question, 420)}
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-              <div className="text-xs font-medium text-slate-500 mb-1">有效问题</div>
-              <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">
+            <div className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] p-3">
+              <div className="text-xs font-medium text-[var(--neutral-600)] mb-1">有效问题</div>
+              <div className="text-sm text-[var(--brand-ink-800)] whitespace-pre-wrap break-words">
                 {truncateText(mergeOutput?.effective_question || run.question, 420)}
               </div>
             </div>
           </div>
 
           {hasClarify && !hasFinalAnswer ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3">
-                <div className="text-xs font-medium text-amber-700 mb-2">本轮触发追问，未进入正式最终回答</div>
-                <ol className="list-decimal pl-5 space-y-1 text-sm text-amber-900">
+              <div className="rounded-lg border border-[var(--brand-yellow-500)]/30 bg-[var(--brand-yellow-100)] p-3">
+                <div className="text-xs font-medium text-[var(--brand-ink-800)] mb-2">本轮触发追问，未进入正式最终回答</div>
+                <ol className="list-decimal pl-5 space-y-1 text-sm text-[var(--brand-ink-900)]">
                   {(clarifyOutput?.clarifying_questions || []).map((question: string, index: number) => (
                       <li key={`${question}-${index}`}>{question}</li>
                   ))}
                 </ol>
               </div>
           ) : (
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="rounded-lg border border-[var(--neutral-200)] bg-white p-3">
                 <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="text-xs font-medium text-slate-500">模型最终回答摘要</div>
-                  <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+                  <div className="text-xs font-medium text-[var(--neutral-600)]">模型最终回答摘要</div>
+                  <div className="flex flex-wrap gap-2 text-[11px] text-[var(--neutral-600)]">
                     <span>回答 {finalOutput?.answer_chars ?? "—"} 字</span>
                     <span>思考 {finalOutput?.thinking_chars ?? "—"} 字</span>
                     <span>引用标记 {finalOutput?.citation_marker_count ?? "—"} 个</span>
@@ -783,11 +803,11 @@ function EndToEndTraceCard({
                     <span>总引用 {contextOutput?.total_reference_count ?? "—"} 条</span>
                   </div>
                 </div>
-                <div className="text-sm text-slate-800 whitespace-pre-wrap break-words">
+                <div className="text-sm text-[var(--brand-ink-800)] whitespace-pre-wrap break-words">
                   {truncateText(finalAnswerSummary, 900)}
                 </div>
                 {promptOutput?.prompt_length ? (
-                    <div className="mt-2 text-xs text-slate-500">
+                    <div className="mt-2 text-xs text-[var(--neutral-600)]">
                       Prompt 长度 {promptOutput.prompt_length}，引用范围 {promptOutput.reference_range || "—"}
                     </div>
                 ) : null}
@@ -800,17 +820,17 @@ function EndToEndTraceCard({
               const failed = stageNodes.some((node) => normalizeStatus(node.status) === "failed");
               const success = stageNodes.length > 0 && stageNodes.every((node) => normalizeStatus(node.status) !== "failed");
               return (
-                  <div key={stage.key} className="grid grid-cols-[150px_1fr] gap-4 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <div key={stage.key} className="grid grid-cols-[150px_1fr] gap-4 rounded-lg border border-[var(--neutral-200)] bg-white px-3 py-2">
                     <div className="flex items-start gap-2">
                       <span
                           className={cn(
                               "mt-1 h-2.5 w-2.5 rounded-full shrink-0",
-                              failed ? "bg-red-500" : success ? "bg-emerald-500" : "bg-slate-300"
+                               failed ? "bg-[var(--error)]" : success ? "bg-[var(--brand-green-600)]" : "bg-[var(--neutral-300)]"
                           )}
                       />
                       <div>
-                        <div className="text-sm font-medium text-slate-800">{stage.title}</div>
-                        <div className="text-[11px] text-slate-500">{stage.description}</div>
+                        <div className="text-sm font-medium text-[var(--brand-ink-800)]">{stage.title}</div>
+                        <div className="text-[11px] text-[var(--neutral-600)]">{stage.description}</div>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -820,17 +840,17 @@ function EndToEndTraceCard({
                               type="button"
                               onClick={() => onSelectNode(node.nodeId)}
                               className={cn(
-                                  "inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors hover:border-blue-300 hover:bg-blue-50",
+                                  "inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors hover:border-[var(--brand-green-100)] hover:bg-[var(--brand-green-050)]",
                                   normalizeStatus(node.status) === "failed"
                                       ? "border-red-200 bg-red-50 text-red-700"
-                                      : "border-slate-200 bg-slate-50 text-slate-700"
+                                      : "border-[var(--neutral-200)] bg-[var(--neutral-050)] text-[var(--brand-ink-700)]"
                               )}
                           >
                             <span>{prettifyNodeName(node.nodeName || node.nodeType)}</span>
-                            <span className="text-slate-400">{formatDuration(resolveNodeDuration(node))}</span>
+                            <span className="text-[var(--neutral-500)]">{formatDuration(resolveNodeDuration(node))}</span>
                           </button>
                       )) : (
-                          <span className="text-xs text-slate-400">未记录</span>
+                          <span className="text-xs text-[var(--neutral-500)]">未记录</span>
                       )}
                     </div>
                   </div>
@@ -1230,46 +1250,46 @@ export function RagTraceDetailPage() {
 
         {/* 意图分类 */}
         {intentInfo && (
-            <Card className={intentInfo.matched ? "border-blue-200 bg-blue-50/60" : "border-amber-200 bg-amber-50/60"}>
+            <Card className={intentInfo.matched ? "border-[var(--brand-green-100)] bg-[var(--brand-green-050)]" : "border-[var(--brand-yellow-500)]/30 bg-[var(--brand-yellow-100)]"}>
               <CardContent className="py-4 px-5">
                 <div className="flex items-start gap-4">
                   <div className={cn(
                       "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
-                      intentInfo.matched ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"
+                      intentInfo.matched ? "bg-[var(--brand-green-100)] text-[var(--brand-green-800)]" : "bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)]"
                   )}>
                     {intentInfo.matched ? <Target className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-slate-700">意图分类</span>
+                      <span className="text-sm font-medium text-[var(--brand-ink-700)]">意图分类</span>
                       {intentInfo.matched ? (
-                          <Badge variant="default" className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-100">
+                          <Badge variant="default" className="text-xs border-[var(--brand-green-100)] bg-[var(--brand-green-100)] text-[var(--brand-green-800)] hover:bg-[var(--brand-green-100)]">
                             已匹配
                           </Badge>
                       ) : (
-                          <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-100">
+                          <Badge variant="secondary" className="text-xs border-[var(--brand-yellow-500)]/30 bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)] hover:bg-[var(--brand-yellow-100)]">
                             未匹配
                           </Badge>
                       )}
                     </div>
                     {intentInfo.matched ? (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                          <span className="font-semibold text-slate-900">
+                          <span className="font-semibold text-[var(--brand-ink-900)]">
                             {intentInfo.name}
                           </span>
-                          <span className="text-xs font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                          <span className="text-xs font-mono text-[var(--neutral-600)] bg-white px-1.5 py-0.5 rounded border border-[var(--neutral-200)]">
                             {intentInfo.code}
                           </span>
                           {intentInfo.kind !== undefined && (
-                              <span className="text-xs text-slate-500">
+                              <span className="text-xs text-[var(--neutral-600)]">
                                 类型：{intentInfo.kind === 0 ? "领域" : intentInfo.kind === 1 ? "系统" : intentInfo.kind === 2 ? "数据" : String(intentInfo.kind)}
                               </span>
                           )}
                           {intentInfo.score !== undefined && (
                               <span className={cn(
                                   "text-xs font-mono px-1.5 py-0.5 rounded",
-                                  intentInfo.score >= 0.8 ? "bg-emerald-100 text-emerald-700" :
-                                      intentInfo.score >= 0.5 ? "bg-amber-100 text-amber-700" :
+                                  intentInfo.score >= 0.8 ? "bg-[var(--brand-green-100)] text-[var(--brand-green-800)]" :
+                                      intentInfo.score >= 0.5 ? "bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)]" :
                                           "bg-red-100 text-red-700"
                               )}>
                                 置信度：{(intentInfo.score * 100).toFixed(0)}%
@@ -1277,7 +1297,7 @@ export function RagTraceDetailPage() {
                           )}
                         </div>
                     ) : (
-                        <p className="text-sm text-slate-600">
+                        <p className="text-sm text-[var(--neutral-600)]">
                           {intentInfo.reason === "parse_error"
                               ? "意图数据解析失败"
                               : "此次查询未命中任何意图节点，已走默认通用问答路由"}
@@ -1290,7 +1310,7 @@ export function RagTraceDetailPage() {
         )}
 
         {/* 指标条 */}
-        <div className="flex items-center bg-slate-50 rounded-lg border border-slate-200 divide-x divide-slate-200">
+        <div className="flex items-center overflow-x-auto rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] divide-x divide-[var(--neutral-200)]">
           <MetricItem
               icon={Clock}
               label="总耗时"
@@ -1341,23 +1361,23 @@ export function RagTraceDetailPage() {
         <Card>
           <CardHeader className="py-3 px-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-slate-700">
+              <CardTitle className="text-sm font-medium text-[var(--brand-ink-700)]">
                 执行时序
               </CardTitle>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-[var(--neutral-600)]">
               窗口 {formatDuration(timeline.totalWindowMs)}
             </span>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             {timeline.nodes.length === 0 ? (
-                <div className="py-16 text-center text-slate-400">
+                <div className="py-16 text-center text-[var(--neutral-500)]">
                   <Activity className="h-10 w-10 mx-auto mb-3 opacity-50" />
                   <p>暂无节点记录</p>
                 </div>
             ) : (
                 <div>
-                  <div className="grid grid-cols-[minmax(180px,1fr)_120px_2fr_100px] gap-4 px-4 py-2 text-xs font-medium text-slate-500 bg-slate-50 border-y border-slate-100">
+                  <div className="grid grid-cols-[minmax(180px,1fr)_120px_2fr_100px] gap-4 px-4 py-2 text-xs font-medium text-[var(--neutral-600)] bg-[var(--neutral-050)] border-y border-[var(--neutral-100)]">
                     <span>节点</span>
                     <span>类型</span>
                     <span>时间线</span>
@@ -1371,7 +1391,7 @@ export function RagTraceDetailPage() {
                     <div />
                   </div>
 
-                  <div className="divide-y divide-slate-50">
+                  <div className="divide-y divide-[var(--neutral-100)]">
                     {timeline.nodes.map((node) => {
                       const nodeDisplayName = prettifyNodeName(node.nodeName || node.methodName || node.nodeId);
                       const nodeStatus = normalizeStatus(node.status);

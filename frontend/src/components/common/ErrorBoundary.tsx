@@ -32,7 +32,7 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Erro
 
     return (
       <div className="flex min-h-screen items-center justify-center px-6">
-        <div className="chat-surface max-w-md rounded-3xl p-8 text-center">
+        <div className="chat-surface max-w-md rounded-lg p-8 text-center">
           <p className="font-display text-xl font-semibold">出现了一点问题</p>
           <p className="mt-3 text-sm text-muted-foreground">{this.state.message}</p>
           <Button className="mt-6" onClick={this.handleReload}>

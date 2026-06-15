@@ -75,13 +75,13 @@ const parseChunkConfig = (raw?: string | null): Record<string, unknown> => {
 };
 
 const statusDotClass = (status?: string | null) => {
-  if (!status) return "bg-muted-foreground/40";
+  if (!status) return "bg-[var(--neutral-300)]";
   const normalized = status.toLowerCase();
-  if (normalized === "success") return "bg-emerald-500";
-  if (normalized === "failed") return "bg-red-500";
-  if (normalized === "running") return "bg-amber-500";
-  if (normalized === "pending") return "bg-slate-400";
-  return "bg-muted-foreground/40";
+  if (normalized === "success") return "bg-[var(--brand-green-600)]";
+  if (normalized === "failed") return "bg-[var(--error)]";
+  if (normalized === "running") return "bg-[var(--brand-cyan-700)]";
+  if (normalized === "pending") return "bg-[var(--brand-yellow-500)]";
+  return "bg-[var(--neutral-300)]";
 };
 
 const formatSize = (size?: number | null) => {
@@ -151,20 +151,20 @@ const formatChunkStrategy = (strategy?: string | null) => {
 };
 
 const FILE_TYPE_MAP: Record<string, { icon: typeof FileText; color: string }> = {
-  pdf:         { icon: FileText, color: "text-red-500" },
-  markdown:    { icon: FileText, color: "text-blue-500" },
-  md:          { icon: FileText, color: "text-blue-500" },
-  doc:         { icon: FileText, color: "text-blue-600" },
-  docx:        { icon: FileText, color: "text-blue-600" },
-  txt:         { icon: FileText, color: "text-slate-500" },
-  csv:         { icon: FileText, color: "text-emerald-500" },
-  image:       { icon: Image,   color: "text-emerald-500" },
-  png:         { icon: Image,   color: "text-emerald-500" },
-  jpg:         { icon: Image,   color: "text-emerald-500" },
-  jpeg:        { icon: Image,   color: "text-emerald-500" },
-  gif:         { icon: Image,   color: "text-emerald-500" },
-  webp:        { icon: Image,   color: "text-emerald-500" },
-  svg:         { icon: Image,   color: "text-emerald-500" },
+  pdf:         { icon: FileText, color: "text-[var(--error)]" },
+  markdown:    { icon: FileText, color: "text-[var(--brand-green-700)]" },
+  md:          { icon: FileText, color: "text-[var(--brand-green-700)]" },
+  doc:         { icon: FileText, color: "text-[var(--brand-cyan-700)]" },
+  docx:        { icon: FileText, color: "text-[var(--brand-cyan-700)]" },
+  txt:         { icon: FileText, color: "text-[var(--neutral-600)]" },
+  csv:         { icon: FileText, color: "text-[var(--brand-green-600)]" },
+  image:       { icon: Image,   color: "text-[var(--brand-green-600)]" },
+  png:         { icon: Image,   color: "text-[var(--brand-green-600)]" },
+  jpg:         { icon: Image,   color: "text-[var(--brand-green-600)]" },
+  jpeg:        { icon: Image,   color: "text-[var(--brand-green-600)]" },
+  gif:         { icon: Image,   color: "text-[var(--brand-green-600)]" },
+  webp:        { icon: Image,   color: "text-[var(--brand-green-600)]" },
+  svg:         { icon: Image,   color: "text-[var(--brand-green-600)]" },
 };
 
 const renderFileTypeIcon = (fileType?: string | null, sourceType?: string | null) => {
@@ -174,9 +174,9 @@ const renderFileTypeIcon = (fileType?: string | null, sourceType?: string | null
     return <Icon className={`h-4 w-4 shrink-0 ${color}`} />;
   }
   if (sourceType?.toLowerCase() === "url") {
-    return <LinkIcon className="h-4 w-4 shrink-0 text-purple-500" />;
+    return <LinkIcon className="h-4 w-4 shrink-0 text-[var(--brand-cyan-700)]" />;
   }
-  return <FileText className="h-4 w-4 shrink-0 text-slate-400" />;
+  return <FileText className="h-4 w-4 shrink-0 text-[var(--neutral-500)]" />;
 };
 
 export function KnowledgeDocumentsPage() {
@@ -666,7 +666,7 @@ export function KnowledgeDocumentsPage() {
                           <div className="flex items-center gap-1.5 min-w-0">
                             <button
                               type="button"
-                              className="block truncate min-w-0 text-left font-medium text-slate-900 transition-colors hover:text-indigo-600 hover:underline underline-offset-4"
+                            className="block truncate min-w-0 text-left font-medium text-[var(--brand-ink-900)] transition-colors hover:text-[var(--brand-green-700)] hover:underline underline-offset-4"
                               title={doc.docName || ""}
                               onClick={() => navigate(`/admin/knowledge/${kbId}/docs/${doc.id}`)}
                             >
@@ -674,7 +674,7 @@ export function KnowledgeDocumentsPage() {
                             </button>
                             {doc.chunksEdited ? (
                               <span
-                                className="shrink-0 rounded-full bg-amber-50 px-1.5 py-px text-[10px] font-medium text-amber-700 ring-1 ring-amber-200"
+                                className="shrink-0 rounded-full bg-[var(--brand-yellow-100)] px-1.5 py-px text-[10px] font-medium text-[var(--brand-ink-800)] ring-1 ring-[var(--brand-yellow-500)]/35"
                                 title="该文档存在被手工编辑过的分块，重新分块会丢失"
                               >
                                 已编辑
@@ -709,7 +709,7 @@ export function KnowledgeDocumentsPage() {
                             onClick={() => handleToggleEnabled(doc)}
                             className={cn(
                               "relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background",
-                              enabled ? "bg-blue-600" : "bg-slate-200"
+                              enabled ? "bg-[var(--brand-green-700)]" : "bg-[var(--neutral-200)]"
                             )}
                           >
                             <span
@@ -884,7 +884,7 @@ export function KnowledgeDocumentsPage() {
                 {chunkTarget?.chunkCount ? (
                   <>
                     <div>文档 [{chunkTarget?.docName}] 已有 {chunkTarget.chunkCount} 个分块记录。</div>
-                    <div className="font-medium text-amber-600">重新分块会清空原有 Chunk 记录及向量数据。</div>
+                    <div className="font-medium text-[var(--brand-ink-800)]">重新分块会清空原有 Chunk 记录及向量数据。</div>
                     {chunkTarget?.chunksEdited ? (
                       <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                         <span className="font-semibold">注意：</span>
@@ -1034,7 +1034,7 @@ export function KnowledgeDocumentsPage() {
                             onClick={handleDetailNoChunkToggle}
                             className={cn(
                               "relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background",
-                              detailNoChunk ? "bg-blue-600" : "bg-slate-200"
+                              detailNoChunk ? "bg-[var(--brand-green-700)]" : "bg-[var(--neutral-200)]"
                             )}
                           >
                             <span
@@ -1116,7 +1116,7 @@ export function KnowledgeDocumentsPage() {
               return (
                 <div className="flex-1 overflow-y-auto sidebar-scroll">
                   {head ? (
-                    <pre className="mx-6 mt-4 overflow-auto rounded-lg border bg-slate-50 px-4 py-3 font-mono text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                    <pre className="mx-6 mt-4 overflow-auto rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] px-4 py-3 font-mono text-xs leading-relaxed text-[var(--brand-ink-700)]">
                       {head}
                     </pre>
                   ) : null}
@@ -1152,9 +1152,10 @@ export function KnowledgeDocumentsPage() {
                     <div className="flex items-center gap-3">
                       <span className={cn(
                         "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        log.status === "success" ? "bg-emerald-50 text-emerald-700" :
-                        log.status === "failed" ? "bg-red-50 text-red-700" :
-                        "bg-amber-50 text-amber-700"
+                        log.status === "success" ? "border border-[var(--brand-green-100)] bg-[var(--brand-green-050)] text-[var(--brand-green-800)]" :
+                        log.status === "failed" ? "border border-red-200 bg-red-50 text-red-700" :
+                        log.status === "running" ? "border border-[var(--brand-cyan-100)] bg-[var(--brand-cyan-100)] text-[var(--brand-cyan-700)]" :
+                        "border border-[var(--brand-yellow-500)]/30 bg-[var(--brand-yellow-100)] text-[var(--brand-ink-800)]"
                       )}>
                         {formatLogStatus(log.status)}
                       </span>
@@ -1170,32 +1171,32 @@ export function KnowledgeDocumentsPage() {
                   {/* 耗时指标卡片 */}
                   <div className={cn("grid gap-3", isPipelineLog ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4")}>
                     {!isPipelineLog && (
-                      <div className="rounded-lg border bg-slate-50/50 p-3">
+                      <div className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] p-3">
                         <div className="text-xs text-muted-foreground mb-1">文本提取</div>
                         <div className="text-lg font-semibold tabular-nums">{formatDuration(log.extractDuration)}</div>
                       </div>
                     )}
-                    <div className="rounded-lg border bg-slate-50/50 p-3">
+                    <div className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] p-3">
                       <div className="text-xs text-muted-foreground mb-1">{chunkLabel}</div>
                       <div className="text-lg font-semibold tabular-nums">{formatDuration(log.chunkDuration)}</div>
                     </div>
                     {!isPipelineLog && (
-                      <div className="rounded-lg border bg-slate-50/50 p-3">
+                      <div className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] p-3">
                         <div className="text-xs text-muted-foreground mb-1">向量化</div>
                         <div className="text-lg font-semibold tabular-nums">{formatDuration(log.embedDuration)}</div>
                       </div>
                     )}
-                    <div className="rounded-lg border bg-slate-50/50 p-3">
+                    <div className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] p-3">
                       <div className="text-xs text-muted-foreground mb-1">持久化</div>
                       <div className="text-lg font-semibold tabular-nums">{formatDuration(log.persistDuration)}</div>
                     </div>
-                    <div className="rounded-lg border bg-slate-50/50 p-3">
+                    <div className="rounded-lg border border-[var(--neutral-200)] bg-[var(--neutral-050)] p-3">
                       <div className="text-xs text-muted-foreground mb-1">其他</div>
                       <div className="text-lg font-semibold tabular-nums">{formatDuration(log.otherDuration)}</div>
                     </div>
-                    <div className="rounded-lg border bg-blue-50 p-3">
-                      <div className="text-xs text-blue-600 mb-1">总耗时</div>
-                      <div className="text-lg font-bold tabular-nums text-blue-600">{formatDuration(log.totalDuration)}</div>
+                    <div className="rounded-lg border border-[var(--brand-cyan-100)] bg-[var(--brand-cyan-100)] p-3">
+                      <div className="text-xs text-[var(--brand-cyan-700)] mb-1">总耗时</div>
+                      <div className="text-lg font-bold tabular-nums text-[var(--brand-cyan-700)]">{formatDuration(log.totalDuration)}</div>
                     </div>
                   </div>
 
@@ -1230,9 +1231,9 @@ export function KnowledgeDocumentsPage() {
       </Dialog>
       {selectedIds.size > 0 && (
         <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center">
-          <div className="animate-fade-up rounded-2xl bg-slate-900 px-5 py-3 text-sm text-white shadow-[0_10px_40px_rgba(0,0,0,0.15)]">
+          <div className="animate-fade-up rounded-lg bg-[var(--brand-ink-900)] px-5 py-3 text-sm text-white shadow-[0_10px_28px_rgba(37,42,66,0.18)]">
             <div className="flex items-center gap-3">
-              <Check className="h-4 w-4 text-emerald-400" />
+              <Check className="h-4 w-4 text-[var(--brand-green-100)]" />
               <span className="tabular-nums font-medium">
                 已选 {selectedIds.size} 项
               </span>
@@ -1250,7 +1251,7 @@ export function KnowledgeDocumentsPage() {
                 type="button"
                 onClick={() => setBatchDeleteOpen(true)}
                 disabled={batchOperating}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-white/10 hover:text-red-300 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-red-300 transition-colors hover:bg-white/10 hover:text-red-200 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
                 删除
@@ -1621,8 +1622,10 @@ function UploadDialog({ open, onOpenChange, onSubmit }: UploadDialogProps) {
                   <div
                     className={cn(
                       "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors select-none",
-                      isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50",
-                      file && !isDragging && "border-primary/40 bg-muted/30"
+                      isDragging
+                        ? "border-[var(--brand-green-700)] bg-[var(--brand-green-050)]"
+                        : "border-[var(--neutral-300)] hover:border-[var(--brand-green-100)] hover:bg-[var(--brand-green-050)]",
+                      file && !isDragging && "border-[var(--brand-green-100)] bg-[var(--neutral-050)]"
                     )}
                     onClick={() => fileInputRef.current?.click()}
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -1642,7 +1645,7 @@ function UploadDialog({ open, onOpenChange, onSubmit }: UploadDialogProps) {
                     />
                     {file ? (
                       <>
-                        <FileUp className="h-7 w-7 text-primary" />
+                        <FileUp className="h-7 w-7 text-[var(--brand-green-700)]" />
                         <div className="text-sm font-medium text-center break-all px-2">{file.name}</div>
                         <div className="text-xs text-muted-foreground">{formatSize(file.size)}</div>
                         <Button
@@ -1831,7 +1834,7 @@ function UploadDialog({ open, onOpenChange, onSubmit }: UploadDialogProps) {
                             onClick={handleNoChunkToggle}
                             className={cn(
                               "relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background",
-                              noChunk ? "bg-blue-600" : "bg-slate-200"
+                              noChunk ? "bg-[var(--brand-green-700)]" : "bg-[var(--neutral-200)]"
                             )}
                           >
                             <span

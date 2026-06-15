@@ -1,8 +1,9 @@
 .select-file {
-  background: rgba(255, 255, 255, 0.698);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--neutral-200);
   border-radius: 8px;
   padding: 10px;
-  box-shadow: 0px 2px 8px 0px rgba(166, 166, 166, 0.251);
+  box-shadow: 0px 2px 8px 0px rgba(23, 32, 27, 0.06);
   max-width: 350px;
   box-sizing: border-box;
 
@@ -13,7 +14,7 @@
 
     font-size: 12px;
     font-weight: bold;
-    color: #007aff;
+    color: var(--brand-green-700);
 
     .icon {
       width: 14px;
@@ -79,7 +80,7 @@
 
     .name {
       flex-grow: 1;
-      color: #333;
+      color: var(--brand-ink-900);
       font-size: 14px;
       white-space: nowrap;
       overflow: hidden;
@@ -88,7 +89,7 @@
 
     .date {
       flex-shrink: 0;
-      color: #999;
+      color: var(--neutral-600);
       font-size: 12px;
     }
   }
@@ -102,17 +103,20 @@
     font-size: 12px;
 
     b {
-      color: var(--ant-color-primary);
+      color: var(--brand-green-700);
     }
 
     :global(.ant-btn) {
       min-width: 58px;
       font-size: 12px;
-      background: linear-gradient(
-        92.67deg,
-        var(--ant-color-primary) 7.06%,
-        #fe752c 94.68%
-      ) !important;
+      background: var(--brand-green-700) !important;
+      border-color: var(--brand-green-700);
+
+      &:hover,
+      &:focus-visible {
+        background: var(--brand-green-800) !important;
+        border-color: var(--brand-green-800);
+      }
     }
   }
 }
@@ -127,7 +131,7 @@
     flex-shrink: 0;
     width: 12px;
     height: 12px;
-    border: 1px solid #999;
+    border: 1px solid var(--brand-cyan-700);
     border-radius: 50%;
     box-sizing: border-box;
     display: flex;
@@ -140,20 +144,21 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: #999;
+      background: var(--brand-cyan-700);
     }
   }
   .title {
     font-size: 10px;
-    color: #999;
+    color: var(--brand-cyan-700);
   }
 }
 
 .select-file-complete {
-  background: rgba(255, 255, 255, 0.698);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--brand-green-100);
   border-radius: 8px;
   padding: 5px 8px;
-  box-shadow: 0px 2px 8px 0px rgba(166, 166, 166, 0.251);
+  box-shadow: 0px 2px 8px 0px rgba(23, 32, 27, 0.06);
   max-width: 350px;
   box-sizing: border-box;
 
@@ -164,7 +169,7 @@
 
   cursor: pointer;
   &:hover {
-    background: rgba(#eee, 0.698);
+    background: var(--brand-green-050);
   }
 
   .icon {
@@ -177,19 +182,19 @@
     flex-shrink: 0;
     font-size: 12px;
     font-weight: bold;
-    color: #007aff;
+    color: var(--brand-green-700);
   }
 
   .desc {
     flex-grow: 1;
     font-size: 12px;
-    color: #999;
+    color: var(--neutral-600);
     text-align: right;
   }
 
   .arrow {
     flex-shrink: 0;
     font-size: 12px;
-    color: #999;
+    color: var(--neutral-600);
   }
 }
