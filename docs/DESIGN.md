@@ -32,14 +32,18 @@
 
 - 管理端新增接口必须挂在 `/api/ragent/*` 并受 `require_admin` 保护。
 - 管理端接口返回统一业务结构，成功时业务 `code` 为 `"0"`。
+- 管理端真实业务接口优先放在专门 router；`ragent_admin_rt.py` 仅保留暂未专门化的兼容薄层，避免同一路径双实现。
 - 修改数据库结构时，同步更新 SQLAlchemy 模型、Alembic 迁移和 `backend/init.sql`。
 - RAG 主链路中的可观测节点应优先记录输入 JSON、输出 JSON、耗时、错误信息和额外上下文。
+- 检索参数必须从系统配置读取，并在执行 Trace 中记录最终生效口径。
 - Prompt 模板中至少应明确 `{question}` 和参考内容变量，缺失时由后端补全兜底上下文。
 
 ## 前端设计约束
 
 - 管理控制台采用工作台风格，避免营销式首页和装饰性内容。
 - 前端视觉升级应对齐公司 Logo 的绿色可信、橙色高效、青色链路、墨蓝专业体系，具体见 [基于公司 Logo 的 UI 优化整体方向](design-docs/logo-driven-ui-optimization.md)。
+- 新增前端 API 实现必须放在 `frontend/src/services/` 并复用 `frontend/src/services/api.ts`；`frontend/src/api/` 仅作为旧调用兼容门面。
+- 登录态与 Token 读写以 `frontend/src/stores/authStore.ts` 和 `frontend/src/utils/storage.ts` 为主源，不再新增 Valtio 用户态。
 - 表格页必须提供关键筛选、状态显示、分页、空态和错误态。
 - Trace、知识库、入库任务等排障页面应支持从列表进入详情，并保留关键 ID 的复制能力。
 - Chat 页面滚动应限制在主内容容器内，避免全局页面滚动影响输入框位置。

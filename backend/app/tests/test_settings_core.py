@@ -86,7 +86,13 @@ class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
         result = await settings_rt.save_settings(
             {
                 "rag": {
-                    "retrieval": {"topK": 8},
+                    "retrieval": {
+                        "topK": 8,
+                        "vectorSimilarityWeight": 0.7,
+                        "similarityThreshold": 0.2,
+                        "candidateTop": 256,
+                        "rerankEnabled": True,
+                    },
                     "generation": {
                         "temperature": 0.25,
                         "promptTemplate": "Answer with citations for: {question}",
@@ -104,6 +110,10 @@ class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["code"], "0")
         data = result["data"]
         self.assertEqual(data["rag"]["retrieval"]["topK"], 8)
+        self.assertEqual(data["rag"]["retrieval"]["vectorSimilarityWeight"], 0.7)
+        self.assertEqual(data["rag"]["retrieval"]["similarityThreshold"], 0.2)
+        self.assertEqual(data["rag"]["retrieval"]["candidateTop"], 256)
+        self.assertTrue(data["rag"]["retrieval"]["rerankEnabled"])
         self.assertEqual(data["rag"]["generation"]["temperature"], 0.25)
         self.assertEqual(data["rag"]["generation"]["promptTemplate"], "Answer with citations for: {question}")
         self.assertEqual(data["ai"]["chat"]["defaultModel"], "deepseek-v4-pro")
@@ -111,6 +121,7 @@ class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
 
         read_back = await settings_rt.get_settings(db=self.db, _=self.credentials)
         self.assertEqual(read_back["data"]["rag"]["retrieval"]["topK"], 8)
+        self.assertEqual(read_back["data"]["rag"]["retrieval"]["vectorSimilarityWeight"], 0.7)
         self.assertEqual(read_back["data"]["rag"]["generation"]["temperature"], 0.25)
 
     async def test_save_runtime_rag_settings_rejects_out_of_range_values(self):
@@ -120,6 +131,21 @@ class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
             _=self.credentials,
         )
 
+        self.assertEqual(result["code"], "400")
+
+    async def test_save_runtime_rag_settings_rejects_invalid_retrieval_params(self):
+        result = await settings_rt.save_settings(
+            {"rag": {"retrieval": {"vectorSimilarityWeight": 1.5}}},
+            db=self.db,
+            _=self.credentials,
+        )
+        self.assertEqual(result["code"], "400")
+
+        result = await settings_rt.save_settings(
+            {"rag": {"retrieval": {"candidateTop": 5000}}},
+            db=self.db,
+            _=self.credentials,
+        )
         self.assertEqual(result["code"], "400")
 
     async def test_saved_legacy_candidates_are_backfilled_with_deepseek_v4_pro(self):
@@ -148,6 +174,12 @@ class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
         candidates = result["data"]["ai"]["chat"]["candidates"]
 
         self.assertIn("deepseek-v4-pro", {item["id"] for item in candidates})
+
+    async def test_default_retrieval_config_keeps_rerank_enabled(self):
+        result = await settings_rt.get_settings(db=self.db, _=self.credentials)
+        retrieval = result["data"]["rag"]["retrieval"]
+
+        self.assertTrue(retrieval["rerankEnabled"])
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ from service.core.chat import (
 from service.ambiguity_service import check_draft_and_clarify, merge_clarifications
 from service.intent_engine import default_intent_router
 from service.auth import access_security
-from service.settings_service import get_retrieval_top_k, load_settings
+from service.settings_service import get_retrieval_config, load_settings
 from service.trace_service import TraceTracker
 from utils import logger
 from database.knowledgebase_operations import insert_knowledgebase, verify_user_knowledgebase
@@ -97,7 +97,8 @@ def _stream_chat_response(
         if deep_model:
             settings = copy.deepcopy(settings)
             settings.setdefault("ai", {}).setdefault("chat", {})["defaultModel"] = deep_model
-    top_k = get_retrieval_top_k(settings)
+    retrieval_config = get_retrieval_config(settings)
+    top_k = retrieval_config["top_k"]
     settings_end = datetime.now()
     tracker.record_node(
         node_type="AuthLoadSettings",
@@ -108,6 +109,7 @@ def _stream_chat_response(
         input_data={"user_id": user_id, "session_id": session_id, "deep_thinking": deep_thinking},
         output_data={
             "top_k": top_k,
+            "retrieval_params": retrieval_config,
             "default_model": settings.get("ai", {}).get("chat", {}).get("defaultModel"),
             "deep_thinking_model": settings.get("ai", {}).get("chat", {}).get("deepThinkingModel"),
             "temperature": settings.get("rag", {}).get("generation", {}).get("temperature"),
@@ -154,6 +156,7 @@ def _stream_chat_response(
             top_k=top_k,
             kb_ids=None,
             tracker=tracker,
+            retrieval_config=retrieval_config,
         )
         logger.info(f"Retrieved {len(references)} related references")
         retrieval_end = datetime.now()
@@ -164,7 +167,7 @@ def _stream_chat_response(
             start_time=retrieval_start,
             end_time=retrieval_end,
             status="success",
-            input_data={"question": question, "top_k": top_k},
+            input_data={"question": question, "retrieval_params": retrieval_config},
             output_data={"references_count": len(references), "references": references},
         )
     except Exception as e:
@@ -178,7 +181,7 @@ def _stream_chat_response(
             end_time=retrieval_end,
             status="failed",
             error_message=str(e),
-            input_data={"question": question, "top_k": top_k},
+            input_data={"question": question, "retrieval_params": retrieval_config},
         )
 
     # 处理追问澄清：若用户已回答追问，合并后重新检索
@@ -211,6 +214,7 @@ def _stream_chat_response(
                 top_k=top_k,
                 kb_ids=None,
                 tracker=tracker,
+                retrieval_config=retrieval_config,
             )
             logger.info(f"重新检索获得 {len(references)} 条参考内容")
             clarify_retrieval_end = datetime.now()
@@ -220,7 +224,7 @@ def _stream_chat_response(
                 start_time=clarify_retrieval_start,
                 end_time=clarify_retrieval_end,
                 status="success",
-                input_data={"question": effective_question, "top_k": top_k, "source": "clarification_merge"},
+                input_data={"question": effective_question, "retrieval_params": retrieval_config, "source": "clarification_merge"},
                 output_data={"references_count": len(references), "references": references},
                 node_id="VectorRetrieveClarified",
             )
@@ -234,7 +238,7 @@ def _stream_chat_response(
                 end_time=clarify_retrieval_end,
                 status="failed",
                 error_message=str(e),
-                input_data={"question": effective_question, "top_k": top_k, "source": "clarification_merge"},
+                input_data={"question": effective_question, "retrieval_params": retrieval_config, "source": "clarification_merge"},
                 node_id="VectorRetrieveClarified",
             )
 

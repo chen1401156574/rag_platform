@@ -13,6 +13,10 @@ export interface SystemSettings {
     };
     retrieval?: {
       topK: number;
+      vectorSimilarityWeight?: number;
+      similarityThreshold?: number;
+      candidateTop?: number;
+      rerankEnabled?: boolean;
     };
     generation?: {
       temperature: number;

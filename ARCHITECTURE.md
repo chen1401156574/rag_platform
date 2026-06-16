@@ -1,6 +1,6 @@
 # 系统架构
 
-更新时间：2026-06-15
+更新时间：2026-06-16
 
 ## 项目概览
 
@@ -70,8 +70,8 @@ React/Vite 前端 -> FastAPI 后端 -> PostgreSQL / Elasticsearch / Redis -> Das
   - `settings/`：系统配置、RAG Prompt、模型参数。
   - `query-term-mapping/`：查询词映射。
   - `sample-questions/`：样例问题。
-- `frontend/src/services/`：前端服务层，封装管理端和业务 API。
-- `frontend/src/api/request/`：Axios 请求封装与鉴权、错误、加载、重复请求插件。
+- `frontend/src/services/`：前端服务层，封装管理端和前台业务 API；统一 Axios 客户端位于 `frontend/src/services/api.ts`。
+- `frontend/src/api/`：前台旧调用兼容门面，实际请求实现迁移到 `frontend/src/services/`。
 
 ## 后端结构
 
@@ -89,7 +89,8 @@ React/Vite 前端 -> FastAPI 后端 -> PostgreSQL / Elasticsearch / Redis -> Das
   - `user_admin_rt.py`：后台用户管理。
 - `backend/app/service/`：业务逻辑。
   - `core/chat.py`：Prompt 渲染、临时文档合并、LLM 流式生成、推荐问题、会话写库。
-  - `core/retrieval.py`、`core/retrieval2.py`：检索入口。
+  - `core/retrieval.py`：当前检索入口，调用 `core/rag/nlp/search_v2.py`。
+  - `core/retrieval2.py`：旧实验检索路径哨兵，禁止业务引用。
   - `core/file_parse.py`：正式入库解析管道。
   - `core/rag/`：分词、同义词、词权重、搜索、ES 连接、Embedding。
   - `core/deepdoc/`：文档解析器和 OCR/布局识别相关能力。
@@ -151,7 +152,7 @@ React/Vite 前端 -> FastAPI 后端 -> PostgreSQL / Elasticsearch / Redis -> Das
 -> Trace 记录
 ```
 
-当前 Trace 主要记录 `IntentClassify`、`VectorRetrieve`、`LLMCall` 节点。歧义命中时，run 状态会标记为 `clarify_needed`。
+当前 Trace 主要记录 `IntentClassify`、`VectorRetrieve`、`LLMCall` 节点，并在检索节点记录最终生效的 `top_k`、向量权重、相似度阈值、候选上限和重排开关。歧义命中时，run 状态会标记为 `clarify_needed`。
 
 ## 关键接口
 
@@ -206,7 +207,7 @@ React/Vite 前端 -> FastAPI 后端 -> PostgreSQL / Elasticsearch / Redis -> Das
 ## 当前实现约束
 
 - `IntentRouter.decide()` 当前仍统一返回知识库检索路线，系统意图和 MCP 意图的流式响应能力已存在但尚未接入主聊天链路。
-- `retrieval.py` 的向量权重参数与 `search_v2.py` 内部融合权重存在不一致，需要统一口径。
+- 检索参数通过系统配置统一管理，Chat 主链路和管理端相似度测试共用 `topK`、`vectorSimilarityWeight`、`similarityThreshold`、`candidateTop`、`rerankEnabled` 口径。
 - DeepDOC PDF 解析精度较高但本地推理成本较大。
 - 快速解析文档仅在 Redis 中保留 2 小时，不可跨会话复用。
 - 前端启用了严格 TypeScript 校验，提交前需要处理未使用 import 和类型问题。
@@ -241,7 +242,14 @@ npm run dev
 
 ```bash
 cd backend
-python -m unittest discover -s app/tests
+PYTHONPATH=app python -m unittest discover -s app/tests
+```
+
+PowerShell：
+
+```powershell
+cd backend
+$env:PYTHONPATH='app'; python -m unittest discover -s app/tests
 ```
 
 前端：
@@ -251,4 +259,3 @@ cd frontend
 npm run lint
 npm run build
 ```
-

@@ -1,15 +1,15 @@
-import { userState } from '@/store/user'
+import { useAuthStore } from '@/stores/authStore'
 import { Navigate } from 'react-router-dom'
-import { useSnapshot } from 'valtio'
 import { useRoute } from '../hook'
 
 export function AuthGuard({ children }: { children?: React.ReactNode }) {
   const route = useRoute()
-  const user = useSnapshot(userState)
+  const token = useAuthStore((state) => state.token)
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
   if (!route?.auth) return children
 
-  if (user.token) {
+  if (token || isAuthenticated) {
     return children
   }
 

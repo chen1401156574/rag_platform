@@ -147,6 +147,39 @@ class SettingsValidationTests(unittest.TestCase):
         self.assertIsNone(err)
         self.assertEqual(patch["rag"]["retrieval"]["topK"], 10)
 
+    def test_validate_retrieval_params(self):
+        patch, err = settings_rt._validate_settings_patch(
+            {
+                "rag": {
+                    "retrieval": {
+                        "vectorSimilarityWeight": 0.65,
+                        "similarityThreshold": 0.2,
+                        "candidateTop": 256,
+                        "rerankEnabled": True,
+                    }
+                }
+            },
+            self.base_settings,
+        )
+        self.assertIsNone(err)
+        self.assertEqual(patch["rag"]["retrieval"]["vectorSimilarityWeight"], 0.65)
+        self.assertEqual(patch["rag"]["retrieval"]["similarityThreshold"], 0.2)
+        self.assertEqual(patch["rag"]["retrieval"]["candidateTop"], 256)
+        self.assertTrue(patch["rag"]["retrieval"]["rerankEnabled"])
+
+    def test_validate_retrieval_params_reject_invalid_values(self):
+        _, err = settings_rt._validate_settings_patch(
+            {"rag": {"retrieval": {"similarityThreshold": -0.1}}},
+            self.base_settings,
+        )
+        self.assertIsNotNone(err)
+
+        _, err = settings_rt._validate_settings_patch(
+            {"rag": {"retrieval": {"rerankEnabled": "yes"}}},
+            self.base_settings,
+        )
+        self.assertIsNotNone(err)
+
     def test_validate_topK_below_1_rejected(self):
         _, err = settings_rt._validate_settings_patch(
             {"rag": {"retrieval": {"topK": 0}}}, self.base_settings

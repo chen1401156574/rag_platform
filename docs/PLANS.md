@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | [Trace 可观测性全链路优化](exec-plans/active/trace-observability-optimization.md) | 进行中 | 围绕 Trace 列表、详情、节点输入输出、Session 维度追踪做管理端排障增强。 |
 | [知识库 Chunk 查看与相似度测试第一阶段](exec-plans/active/chunk-similarity-phase1.md) | 待实施/待核验 | 面向管理端知识库 Chunk 下钻、检索相似度测试和召回质量诊断。 |
+| [前后端框架与实现体系收敛计划](exec-plans/active/framework-consolidation.md) | 阶段完成/观察中 | 已完成请求与认证主路径、重复管理 router、旧检索路径和检索参数口径收敛；UI 底层长期选型保留逐页治理。 |
 
 ## 已完成或阶段性归档
 

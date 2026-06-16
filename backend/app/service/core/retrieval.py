@@ -11,8 +11,28 @@ es_connection = ESConnection()
 dealer = Dealer(dataStore=es_connection)
 
 
-def retrieve_content(indexNames: str, question: str, top_k: int = 5, kb_ids=None, tracker=None):
-    page_size = top_k if top_k and top_k > 0 else 5
+def _normalize_retrieval_config(top_k: int = 5, retrieval_config: dict | None = None) -> dict:
+    config = retrieval_config or {}
+    page_size = int(config.get("top_k") or top_k or 5)
+    page_size = max(page_size, 1)
+    vector_similarity_weight = float(config.get("vector_similarity_weight", 0.6))
+    vector_similarity_weight = min(max(vector_similarity_weight, 0.0), 1.0)
+    similarity_threshold = float(config.get("similarity_threshold", 0.1))
+    similarity_threshold = min(max(similarity_threshold, 0.0), 1.0)
+    candidate_top = int(config.get("candidate_top", 1024))
+    candidate_top = min(max(candidate_top, page_size), 4096)
+    return {
+        "top_k": page_size,
+        "vector_similarity_weight": vector_similarity_weight,
+        "similarity_threshold": similarity_threshold,
+        "candidate_top": candidate_top,
+        "rerank_enabled": bool(config.get("rerank_enabled", False)),
+    }
+
+
+def retrieve_content(indexNames: str, question: str, top_k: int = 5, kb_ids=None, tracker=None, retrieval_config=None):
+    effective_config = _normalize_retrieval_config(top_k=top_k, retrieval_config=retrieval_config)
+    page_size = effective_config["top_k"]
     if isinstance(kb_ids, str):
         kb_ids = [kb_ids]
 
@@ -24,9 +44,8 @@ def retrieve_content(indexNames: str, question: str, top_k: int = 5, kb_ids=None
             output_data={
                 "tenant_ids": indexNames,
                 "kb_ids": kb_ids,
-                "top_k": page_size,
                 "page": 1,
-                "vector_similarity_weight": 0.6,
+                "retrieval_params": effective_config,
             },
         )
 
@@ -36,7 +55,10 @@ def retrieve_content(indexNames: str, question: str, top_k: int = 5, kb_ids=None
                                embd_mdl = None,
                                tenant_ids = indexNames,
                                kb_ids = kb_ids,
-                               vector_similarity_weight=0.6,
+                               vector_similarity_weight=effective_config["vector_similarity_weight"],
+                               similarity_threshold=effective_config["similarity_threshold"],
+                               top=effective_config["candidate_top"],
+                               rerank_mdl="configured-rerank" if effective_config["rerank_enabled"] else None,
                                page = 1,
                                page_size = page_size
     )
@@ -59,7 +81,7 @@ def retrieve_content(indexNames: str, question: str, top_k: int = 5, kb_ids=None
                 "returned_chunks": len(chunks),
                 "doc_names": list({chunk.get("docnm_kwd", "") for chunk in chunks if chunk.get("docnm_kwd")})[:10],
                 "fusion": "fulltext + dense vector",
-                "vector_similarity_weight": 0.6,
+                "retrieval_params": effective_config,
             },
         )
 
@@ -96,10 +118,10 @@ def retrieve_content(indexNames: str, question: str, top_k: int = 5, kb_ids=None
         tracker.record_event(
             node_type="RerankChunks",
             node_name="Rerank Chunks",
-            input_data={"candidate_count": len(results.get("chunks", [])), "top_k": page_size},
+            input_data={"candidate_count": len(results.get("chunks", [])), "retrieval_params": effective_config},
             output_data={
                 "returned_count": len(extracted_data),
-                "rerank_applied": True,
+                "model_rerank_enabled": effective_config["rerank_enabled"],
                 "max_similarity": max(similarities) if similarities else None,
                 "min_similarity": min(similarities) if similarities else None,
                 "documents": [

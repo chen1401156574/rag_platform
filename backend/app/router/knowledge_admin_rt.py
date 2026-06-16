@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from models.knowledge_admin import KnowledgeBaseAdmin, KnowledgeDocumentAdmin
 from service.auth import access_security
+from service.settings_service import get_retrieval_config, load_settings
 from utils.database import get_db
 from utils.response import error_result, success_result
 
@@ -398,9 +399,17 @@ def _run_document_retrieval(
     top_k: int,
     collection_name: str,
     es_doc_id: str,
+    retrieval_config: Optional[dict[str, Any]] = None,
 ) -> list[dict[str, Any]]:
     from service.core.rag.nlp.search_v2 import Dealer
     from service.core.rag.utils.es_conn import ESConnection
+
+    config = dict(retrieval_config or {})
+    config["top_k"] = top_k
+    vector_similarity_weight = float(config.get("vector_similarity_weight", 0.6))
+    similarity_threshold = float(config.get("similarity_threshold", 0.1))
+    candidate_top = int(config.get("candidate_top", max(top_k, 128)))
+    rerank_enabled = bool(config.get("rerank_enabled", False))
 
     dealer = Dealer(dataStore=ESConnection())
     result = dealer.retrieval(
@@ -411,8 +420,10 @@ def _run_document_retrieval(
         doc_ids=[es_doc_id],
         page=1,
         page_size=top_k,
-        vector_similarity_weight=0.6,
-        top=max(top_k, 128),
+        vector_similarity_weight=vector_similarity_weight,
+        similarity_threshold=similarity_threshold,
+        top=max(candidate_top, top_k),
+        rerank_mdl="configured-rerank" if rerank_enabled else None,
         highlight=True,
     )
     chunks = [
@@ -431,8 +442,10 @@ def _run_document_retrieval(
         doc_ids=[es_doc_id],
         page=1,
         page_size=top_k,
-        vector_similarity_weight=0.6,
-        top=max(top_k, 128),
+        vector_similarity_weight=vector_similarity_weight,
+        similarity_threshold=similarity_threshold,
+        top=max(candidate_top, top_k),
+        rerank_mdl="configured-rerank" if rerank_enabled else None,
         highlight=True,
         rank_feature=None,
     )
@@ -468,6 +481,29 @@ def _doc_record(doc: KnowledgeDocumentAdmin) -> dict[str, Any]:
 
 
 # ── Knowledge Base CRUD ──
+
+@router.get("/knowledge-base/chunk-strategies")
+async def get_chunk_strategies(_: JwtAuthorizationCredentials = Security(access_security)):
+    return success_result(
+        data=[
+            {
+                "value": "fixed_size",
+                "label": "Fixed size",
+                "defaultConfig": {"chunkSize": 512, "overlapSize": 128},
+            },
+            {
+                "value": "semantic",
+                "label": "Semantic",
+                "defaultConfig": {
+                    "targetChars": 1400,
+                    "maxChars": 1800,
+                    "minChars": 600,
+                    "overlapChars": 0,
+                },
+            },
+        ]
+    )
+
 
 @router.get("/knowledge-base/page")
 @router.get("/knowledge-base")
@@ -837,7 +873,9 @@ async def retrieval_test(
 
         collection_name = _collection_name(kb)
         es_doc_id = _es_doc_id(doc.doc_name)
-        chunks = _run_document_retrieval(question, top_k, collection_name, es_doc_id)
+        retrieval_config = get_retrieval_config(load_settings(db))
+        retrieval_config["top_k"] = top_k
+        chunks = _run_document_retrieval(question, top_k, collection_name, es_doc_id, retrieval_config)
         records = [
             _retrieval_hit_record(chunk, index + 1)
             for index, chunk in enumerate(chunks)
@@ -850,6 +888,7 @@ async def retrieval_test(
                 "kbId": kb.id,
                 "collectionName": collection_name,
                 "topK": top_k,
+                "retrievalParams": retrieval_config,
                 "records": records,
             }
         )

@@ -3,8 +3,8 @@ import iconRepository from '@/assets/layout/repository.svg'
 import logo from '@/assets/logo-brand.png'
 import { CHAT_SESSION_STORAGE_KEY } from '@/pages/chat/shared'
 import { deviceState } from '@/store/device'
+import { useAuthStore } from '@/stores/authStore'
 import { decodeJwtSubject, isAdminSubject } from '@/utils/auth'
-import { storage as ragentStorage } from '@/utils/storage'
 import { useNavigate } from 'react-router-dom'
 import { useSnapshot } from 'valtio'
 import { Background } from './background'
@@ -17,8 +17,8 @@ const TITLE = import.meta.env.VITE_TITLE || '企业知识问答'
 export function BaseLayout({ children }: { children?: React.ReactNode }) {
   const navigate = useNavigate()
   const device = useSnapshot(deviceState)
-  const ragentUser = ragentStorage.getUser()
-  const jwtSubject = decodeJwtSubject(ragentStorage.getToken())
+  const { user: ragentUser, token } = useAuthStore()
+  const jwtSubject = decodeJwtSubject(token)
   const showAdminEntry = isAdminSubject({
     role: ragentUser?.role ?? jwtSubject?.role,
     status: ragentUser?.status ?? jwtSubject?.status,

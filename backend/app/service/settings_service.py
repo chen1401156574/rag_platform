@@ -22,7 +22,13 @@ DEFAULT_RAG_SETTINGS: dict[str, Any] = {
             "dimension": 1536,
             "metricType": "cosine",
         },
-        "retrieval": {"topK": 5},
+        "retrieval": {
+            "topK": 5,
+            "vectorSimilarityWeight": 0.6,
+            "similarityThreshold": 0.1,
+            "candidateTop": 1024,
+            "rerankEnabled": True,
+        },
         "generation": {
             "temperature": 0.7,
             "promptTemplate": (
@@ -200,7 +206,9 @@ def validate_settings_patch(payload: dict[str, Any], current: dict[str, Any]) ->
             if isinstance(provider, dict):
                 provider.pop("apiKey", None)
 
-    top_k = patch.get("rag", {}).get("retrieval", {}).get("topK")
+    retrieval = patch.get("rag", {}).get("retrieval", {})
+
+    top_k = retrieval.get("topK") if isinstance(retrieval, dict) else None
     if top_k is not None:
         try:
             top_k_int = int(top_k)
@@ -209,6 +217,40 @@ def validate_settings_patch(payload: dict[str, Any], current: dict[str, Any]) ->
         if top_k_int < 1 or top_k_int > 50:
             return None, "topK 范围：1-50"
         patch["rag"]["retrieval"]["topK"] = top_k_int
+
+    vector_weight = retrieval.get("vectorSimilarityWeight") if isinstance(retrieval, dict) else None
+    if vector_weight is not None:
+        try:
+            vector_weight_value = float(vector_weight)
+        except (TypeError, ValueError):
+            return None, "vectorSimilarityWeight 必须为数字"
+        if vector_weight_value < 0 or vector_weight_value > 1:
+            return None, "vectorSimilarityWeight 范围：0-1"
+        patch["rag"]["retrieval"]["vectorSimilarityWeight"] = vector_weight_value
+
+    similarity_threshold = retrieval.get("similarityThreshold") if isinstance(retrieval, dict) else None
+    if similarity_threshold is not None:
+        try:
+            similarity_threshold_value = float(similarity_threshold)
+        except (TypeError, ValueError):
+            return None, "similarityThreshold 必须为数字"
+        if similarity_threshold_value < 0 or similarity_threshold_value > 1:
+            return None, "similarityThreshold 范围：0-1"
+        patch["rag"]["retrieval"]["similarityThreshold"] = similarity_threshold_value
+
+    candidate_top = retrieval.get("candidateTop") if isinstance(retrieval, dict) else None
+    if candidate_top is not None:
+        try:
+            candidate_top_int = int(candidate_top)
+        except (TypeError, ValueError):
+            return None, "candidateTop 必须为整数"
+        if candidate_top_int < 1 or candidate_top_int > 4096:
+            return None, "candidateTop 范围：1-4096"
+        patch["rag"]["retrieval"]["candidateTop"] = candidate_top_int
+
+    rerank_enabled = retrieval.get("rerankEnabled") if isinstance(retrieval, dict) else None
+    if rerank_enabled is not None and not isinstance(rerank_enabled, bool):
+        return None, "rerankEnabled 必须为布尔值"
 
     temperature = patch.get("rag", {}).get("generation", {}).get("temperature")
     if temperature is not None:
@@ -242,6 +284,36 @@ def get_retrieval_top_k(settings: dict[str, Any]) -> int:
         return int(settings.get("rag", {}).get("retrieval", {}).get("topK", 5))
     except (TypeError, ValueError):
         return 5
+
+
+def get_retrieval_config(settings: dict[str, Any]) -> dict[str, Any]:
+    retrieval = settings.get("rag", {}).get("retrieval", {})
+    top_k = get_retrieval_top_k(settings)
+    try:
+        vector_similarity_weight = float(retrieval.get("vectorSimilarityWeight", 0.6))
+    except (TypeError, ValueError):
+        vector_similarity_weight = 0.6
+    vector_similarity_weight = min(max(vector_similarity_weight, 0.0), 1.0)
+
+    try:
+        similarity_threshold = float(retrieval.get("similarityThreshold", 0.1))
+    except (TypeError, ValueError):
+        similarity_threshold = 0.1
+    similarity_threshold = min(max(similarity_threshold, 0.0), 1.0)
+
+    try:
+        candidate_top = int(retrieval.get("candidateTop", 1024))
+    except (TypeError, ValueError):
+        candidate_top = 1024
+    candidate_top = min(max(candidate_top, top_k), 4096)
+
+    return {
+        "top_k": top_k,
+        "vector_similarity_weight": vector_similarity_weight,
+        "similarity_threshold": similarity_threshold,
+        "candidate_top": candidate_top,
+        "rerank_enabled": bool(retrieval.get("rerankEnabled", True)),
+    }
 
 
 def get_generation_temperature(settings: dict[str, Any]) -> float:

@@ -1,12 +1,10 @@
 import * as api from '@/api'
 import brandLogo from '@/assets/logo-brand.png'
 import { Background } from '@/layout/base/background'
-import { userActions, userState } from '@/store/user'
-import { decodeJwtSubject } from '@/utils/auth'
+import { useAuthStore } from '@/stores/authStore'
 import { Button, Flex, Form, Input, Tabs, TabsProps } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useSnapshot } from 'valtio'
 import styles from './index.module.scss'
 
 const IconUser = (
@@ -27,7 +25,7 @@ const IconUser = (
 )
 
 export default function Login() {
-  const user = useSnapshot(userState)
+  const { user, login: loginWithPassword, isLoading } = useAuthStore()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login')
 
@@ -37,33 +35,14 @@ export default function Login() {
     repeatPassword: string
   }>()
   useEffect(() => {
-    if (user.username) {
+    if (user?.username) {
       form.setFieldValue('username', user.username)
     }
-  }, [])
+  }, [form, user?.username])
 
   async function login() {
     const { username, password } = form.getFieldsValue()
-    const { data } = await api.user.login({ username, password })
-    window.$app.message.success('登录成功')
-    userActions.setUsername(username)
-    userActions.setToken(data.access_token)
-    const bearerToken = `Bearer ${data.access_token}`
-    const subject = decodeJwtSubject(data.access_token)
-    const resolvedUsername = subject?.user_name || username
-    const role = subject?.role || 'user'
-    const status = subject?.status ?? 1
-    window.localStorage.setItem('ragent_token', bearerToken)
-    window.localStorage.setItem(
-      'ragent_user',
-      JSON.stringify({
-        userId: subject?.user_id,
-        username: resolvedUsername,
-        role,
-        status,
-        token: bearerToken,
-      }),
-    )
+    await loginWithPassword(username, password)
     navigate('/')
   }
   async function register() {
@@ -119,6 +98,7 @@ export default function Login() {
               type="primary"
               htmlType="submit"
               size="large"
+              loading={isLoading}
             >
               登录
             </Button>

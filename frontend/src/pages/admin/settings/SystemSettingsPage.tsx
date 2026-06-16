@@ -40,6 +40,10 @@ export function SystemSettingsPage() {
   // Editable fields
   const [temperature, setTemperature] = useState(0.7);
   const [topK, setTopK] = useState(5);
+  const [vectorSimilarityWeight, setVectorSimilarityWeight] = useState(0.6);
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.1);
+  const [candidateTop, setCandidateTop] = useState(1024);
+  const [rerankEnabled, setRerankEnabled] = useState(true);
   const [promptTemplate, setPromptTemplate] = useState("");
   const [defaultChatModel, setDefaultChatModel] = useState("");
   const [queryRewriteEnabled, setQueryRewriteEnabled] = useState(false);
@@ -57,6 +61,10 @@ export function SystemSettingsPage() {
       setTemperature(typeof t === "number" ? t : 0.7);
       const k = data?.rag?.retrieval?.topK;
       setTopK(typeof k === "number" ? k : 5);
+      setVectorSimilarityWeight(data?.rag?.retrieval?.vectorSimilarityWeight ?? 0.6);
+      setSimilarityThreshold(data?.rag?.retrieval?.similarityThreshold ?? 0.1);
+      setCandidateTop(data?.rag?.retrieval?.candidateTop ?? 1024);
+      setRerankEnabled(data?.rag?.retrieval?.rerankEnabled ?? true);
       setPromptTemplate(data?.rag?.generation?.promptTemplate || "");
       setDefaultChatModel(data?.ai?.chat?.defaultModel || "");
       setQueryRewriteEnabled(!!data?.rag?.queryRewrite?.enabled);
@@ -79,7 +87,13 @@ export function SystemSettingsPage() {
     // Build the patch following backend expected structure
     const patch = {
       rag: {
-        retrieval: { topK },
+        retrieval: {
+          topK,
+          vectorSimilarityWeight,
+          similarityThreshold,
+          candidateTop,
+          rerankEnabled,
+        },
         generation: { temperature, promptTemplate },
         queryRewrite: { enabled: queryRewriteEnabled },
         rateLimit: {
@@ -112,6 +126,10 @@ export function SystemSettingsPage() {
     if (!settings) return;
     setTemperature(settings?.rag?.generation?.temperature ?? 0.7);
     setTopK(settings?.rag?.retrieval?.topK ?? 5);
+    setVectorSimilarityWeight(settings?.rag?.retrieval?.vectorSimilarityWeight ?? 0.6);
+    setSimilarityThreshold(settings?.rag?.retrieval?.similarityThreshold ?? 0.1);
+    setCandidateTop(settings?.rag?.retrieval?.candidateTop ?? 1024);
+    setRerankEnabled(settings?.rag?.retrieval?.rerankEnabled ?? true);
     setPromptTemplate(settings?.rag?.generation?.promptTemplate ?? "");
     setDefaultChatModel(settings?.ai?.chat?.defaultModel ?? "");
     setQueryRewriteEnabled(!!settings?.rag?.queryRewrite?.enabled);
@@ -174,14 +192,14 @@ export function SystemSettingsPage() {
         </div>
       </div>
 
-      {/* ── RAG 生成参数 ── */}
+      {/* ── RAG 检索与生成参数 ── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <SlidersHorizontal className="w-5 h-5" />
-            RAG 生成参数
+            RAG 检索与生成参数
           </CardTitle>
-          <CardDescription>调整大模型回答的温度、检索数量与提示词模板</CardDescription>
+          <CardDescription>调整召回、重排、大模型温度与提示词模板</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
@@ -215,7 +233,65 @@ export function SystemSettingsPage() {
                   if (v >= 1 && v <= 50) setTopK(v);
                 }}
               />
-              <p className="text-xs text-muted-foreground">每次问答从向量库召回的相关文档片段数（1-50）</p>
+              <p className="text-xs text-muted-foreground">每次问答返回的相关文档片段数（1-50）</p>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>向量相似度权重</Label>
+                <span className="text-sm font-medium tabular-nums text-slate-700">
+                  {vectorSimilarityWeight.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                value={[vectorSimilarityWeight]}
+                onValueChange={(v) => setVectorSimilarityWeight(v[0])}
+                min={0}
+                max={1}
+                step={0.05}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>0 — 更偏关键词</span>
+                <span>1 — 更偏向量</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>相似度阈值</Label>
+                <span className="text-sm font-medium tabular-nums text-slate-700">
+                  {similarityThreshold.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                value={[similarityThreshold]}
+                onValueChange={(v) => setSimilarityThreshold(v[0])}
+                min={0}
+                max={1}
+                step={0.05}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground">低于阈值的候选片段会被过滤</p>
+            </div>
+            <div className="space-y-2">
+              <Label>候选召回上限</Label>
+              <Input
+                type="number"
+                min={1}
+                max={4096}
+                value={candidateTop}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (v >= 1 && v <= 4096) setCandidateTop(v);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">进入排序阶段的最大候选数量（1-4096）</p>
+            </div>
+            <div className="flex min-h-[76px] items-center justify-between rounded-lg border border-slate-200/70 bg-white px-4 py-3">
+              <div className="space-y-1">
+                <Label>启用模型重排</Label>
+                <p className="text-xs text-muted-foreground">开启后使用配置的 rerank 模型参与排序</p>
+              </div>
+              <Switch checked={rerankEnabled} onCheckedChange={setRerankEnabled} />
             </div>
           </div>
 

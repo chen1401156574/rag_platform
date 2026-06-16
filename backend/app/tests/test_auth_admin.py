@@ -190,6 +190,28 @@ class RagentAdminRouteProtectionTests(unittest.TestCase):
             dependency_calls = {dependency.call for dependency in route.dependant.dependencies}
             self.assertIn(auth.require_admin, dependency_calls, route.path)
 
+    def test_legacy_compat_router_does_not_duplicate_specialized_admin_routes(self):
+        install_lightweight_stubs()
+        ragent_admin_rt = importlib.import_module("router.ragent_admin_rt")
+        compat_paths = {
+            route.path
+            for route in ragent_admin_rt.router.routes
+            if isinstance(route, APIRoute)
+        }
+        forbidden_prefixes = (
+            "/admin/dashboard",
+            "/knowledge-base",
+            "/ingestion",
+            "/rag/traces",
+            "/rag/settings",
+        )
+
+        for path in compat_paths:
+            self.assertFalse(
+                path.startswith(forbidden_prefixes),
+                f"兼容 router 不应重复承载专门管理接口: {path}",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
