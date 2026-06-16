@@ -15,6 +15,7 @@ from router import settings_rt
 from router import knowledge_admin_rt
 from router import ingestion_rt
 from router import trace_rt
+from router import llm_provider_rt
 from router import dashboard_rt
 from service.auth import require_admin
 from utils.database import init_db
@@ -87,6 +88,7 @@ app.include_router(knowledge_admin_rt.router, prefix="/api/ragent", dependencies
 app.include_router(ingestion_rt.router, prefix="/api/ragent", dependencies=ragent_admin_dependencies)
 app.include_router(trace_rt.router, prefix="/api/ragent", dependencies=ragent_admin_dependencies)
 app.include_router(dashboard_rt.router, prefix="/api/ragent", dependencies=ragent_admin_dependencies)
+app.include_router(llm_provider_rt.router, prefix="/api/ragent", dependencies=ragent_admin_dependencies)
 app.include_router(ragent_admin_rt.router, prefix="/api/ragent", dependencies=ragent_admin_dependencies)
 
 if __name__=='__main__':

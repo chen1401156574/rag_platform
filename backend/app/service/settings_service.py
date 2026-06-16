@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from models.system_config import SystemConfig
+from utils.database import SessionLocal
 
 
 SETTINGS_KEY = "rag_settings"
@@ -160,6 +161,23 @@ def load_settings(db: Session) -> dict[str, Any]:
     except Exception:
         pass
     ensure_default_chat_candidates(settings)
+    # 从 t_llm_provider 动态注入模型候选
+    try:
+        from models.llm_provider import LLMProvider
+        rows = db.scalars(
+            select(LLMProvider).where(LLMProvider.is_active == 1)
+        ).all()
+        for p in rows:
+            models = p.get_enabled_models()
+            for model_id in models:
+                settings["ai"]["chat"]["candidates"].append({
+                    "id": model_id,
+                    "provider": p.name,
+                    "model": model_id,
+                    "enabled": True,
+                })
+    except Exception:
+        pass
     return settings
 
 
@@ -367,6 +385,30 @@ def _deepseek_chat_env_config() -> dict[str, str] | None:
 
 
 def get_chat_openai_config(settings: dict[str, Any], fallback_model: str | None = None) -> dict[str, str | None]:
+    model = fallback_model or get_chat_model(settings)
+
+    # 优先查找注册的 LLM 提供商
+    try:
+        from models.llm_provider import LLMProvider
+        from utils.crypto import decrypt_api_key
+        db = SessionLocal()
+        try:
+            rows = db.scalars(
+                select(LLMProvider).where(LLMProvider.is_active == 1)
+            ).all()
+            for p in rows:
+                if model in p.get_enabled_models():
+                    return {
+                        "provider": p.name,
+                        "base_url": p.base_url,
+                        "api_key": decrypt_api_key(p.encrypted_api_key),
+                        "model": model,
+                    }
+        finally:
+            db.close()
+    except Exception:
+        pass
+
     deepseek_config = _deepseek_chat_env_config()
     if deepseek_config:
         return deepseek_config
@@ -375,5 +417,5 @@ def get_chat_openai_config(settings: dict[str, Any], fallback_model: str | None 
         "provider": "dashscope-openai-compatible",
         "base_url": _env_text("DASHSCOPE_BASE_URL"),
         "api_key": _env_text("DASHSCOPE_API_KEY"),
-        "model": fallback_model or get_chat_model(settings),
+        "model": model,
     }
