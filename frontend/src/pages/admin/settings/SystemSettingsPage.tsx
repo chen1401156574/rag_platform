@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Save, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { Save, RotateCcw, SlidersHorizontal, Plus, Trash2, RefreshCw, Wifi } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,6 +25,15 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import type { SystemSettings } from "@/services/settingsService";
 import { getSystemSettings, saveSystemSettings } from "@/services/settingsService";
+import type { LLMProvider } from "@/services/llmProviderService";
+import {
+  listProviders,
+  createProvider,
+  updateProvider,
+  deleteProvider,
+  fetchProviderModels,
+  testProviderConnection,
+} from "@/services/llmProviderService";
 import { getErrorMessage } from "@/utils/error";
 
 function InfoItem({ label, value }: { label: string; value: ReactNode }) {
@@ -29,6 +42,301 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
       <span className="text-xs text-slate-500">{label}</span>
       <div className="text-sm font-medium text-slate-800">{value}</div>
     </div>
+  );
+}
+
+function LLMProviderPanel() {
+  const [providers, setProviders] = useState<LLMProvider[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formUrl, setFormUrl] = useState("");
+  const [formKey, setFormKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [modelsModalId, setModelsModalId] = useState<string | null>(null);
+  const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+  const [checkedModels, setCheckedModels] = useState<Set<string>>(new Set());
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      const data = await listProviders();
+      setProviders(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setFormName("");
+    setFormUrl("");
+    setFormKey("");
+    setModalOpen(true);
+  };
+
+  const openEdit = (p: LLMProvider) => {
+    setEditingId(p.id);
+    setFormName(p.name);
+    setFormUrl(p.base_url);
+    setFormKey("");
+    setModalOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!formName.trim() || !formUrl.trim()) return;
+    setSaving(true);
+    try {
+      if (editingId) {
+        const data: Record<string, unknown> = { name: formName.trim(), base_url: formUrl.trim() };
+        if (formKey.trim()) data.api_key = formKey.trim();
+        await updateProvider(editingId, data);
+      } else {
+        if (!formKey.trim()) { toast.error("请输入 API Key"); setSaving(false); return; }
+        await createProvider({ name: formName.trim(), base_url: formUrl.trim(), api_key: formKey.trim() });
+      }
+      setModalOpen(false);
+      await load();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteProvider(id);
+      await load();
+      toast.success("已删除");
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const openModelsModal = async (p: LLMProvider) => {
+    setModelsModalId(p.id);
+    setFetchedModels([]);
+    setCheckedModels(new Set(p.enabled_models));
+    setFetchingModels(true);
+    try {
+      const result = await fetchProviderModels(p.id);
+      setFetchedModels(result.models);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  const saveModelSelection = async () => {
+    if (!modelsModalId) return;
+    try {
+      await updateProvider(modelsModalId, { enabled_models: Array.from(checkedModels) });
+      setModelsModalId(null);
+      await load();
+      toast.success("模型列表已更新");
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const toggleModel = (modelId: string) => {
+    setCheckedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(modelId)) next.delete(modelId);
+      else next.add(modelId);
+      return next;
+    });
+  };
+
+  const handleTest = async (id: string) => {
+    setTestingId(id);
+    try {
+      await testProviderConnection(id);
+      toast.success("连接正常");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTestingId(null);
+    }
+  };
+
+  if (loading) return <div className="text-sm text-muted-foreground py-8">加载中...</div>;
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Wifi className="w-5 h-5" />
+              模型提供商
+            </CardTitle>
+            <CardDescription>管理 OpenAI 兼容的大模型端点，自动发现可选模型</CardDescription>
+          </div>
+          <Button onClick={openCreate}>
+            <Plus className="w-4 h-4 mr-2" />
+            添加提供商
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {providers.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-8 text-center">暂无提供商，点击上方按钮添加</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>名称</TableHead>
+                  <TableHead>API 地址</TableHead>
+                  <TableHead>启用模型</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead className="w-[280px]">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {providers.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell className="font-mono text-xs">{p.base_url}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {p.enabled_models.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">未配置</span>
+                        ) : (
+                          p.enabled_models.map((m) => (
+                            <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>
+                          ))
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={p.is_active ? "default" : "secondary"}>
+                        {p.is_active ? "启用" : "禁用"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openEdit(p)}>编辑</Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openModelsModal(p)}
+                        >
+                          <RefreshCw className="w-3 h-3 mr-1" />
+                          获取模型
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={testingId === p.id}
+                          onClick={() => handleTest(p.id)}
+                        >
+                          {testingId === p.id ? "测试中..." : "测试"}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleDelete(p.id)}>
+                          <Trash2 className="w-3 h-3 text-red-500" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 添加/编辑弹窗 */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId ? "编辑提供商" : "添加提供商"}</DialogTitle>
+            <DialogDescription>
+              录入兼容 OpenAI 接口的大模型端点信息
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>名称</Label>
+              <Input
+                placeholder="例如：公司内部 DeepSeek"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>API 地址</Label>
+              <Input
+                placeholder="https://api.example.com/v1"
+                value={formUrl}
+                onChange={(e) => setFormUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>API Key</Label>
+              <Input
+                type="password"
+                placeholder={editingId ? "留空则不修改" : "请输入 API Key"}
+                value={formKey}
+                onChange={(e) => setFormKey(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalOpen(false)}>取消</Button>
+            <Button disabled={saving} onClick={handleSave}>
+              {saving ? "保存中..." : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 模型选择弹窗 */}
+      <Dialog open={!!modelsModalId} onOpenChange={() => setModelsModalId(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>选择可用模型</DialogTitle>
+            <DialogDescription>
+              勾选需要启用的模型，系统将自动从该端点获取模型列表
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 max-h-[400px] overflow-y-auto">
+            {fetchingModels ? (
+              <div className="text-sm text-muted-foreground text-center py-8">正在获取模型列表...</div>
+            ) : fetchedModels.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-8">未获取到模型</div>
+            ) : (
+              <div className="space-y-2">
+                {fetchedModels.map((modelId) => (
+                  <div key={modelId} className="flex items-center gap-3 rounded-lg border px-4 py-3">
+                    <Checkbox
+                      id={`model-${modelId}`}
+                      checked={checkedModels.has(modelId)}
+                      onCheckedChange={() => toggleModel(modelId)}
+                    />
+                    <Label htmlFor={`model-${modelId}`} className="font-mono text-sm cursor-pointer">
+                      {modelId}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModelsModalId(null)}>取消</Button>
+            <Button disabled={fetchingModels} onClick={saveModelSelection}>保存选择</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -178,7 +486,7 @@ export function SystemSettingsPage() {
       <div className="admin-page-header">
         <div>
           <h1 className="admin-page-title">系统配置</h1>
-          <p className="admin-page-subtitle">调整全局 RAG 检索与大模型参数，保存后实时生效</p>
+          <p className="admin-page-subtitle">调整全局 RAG 检索、大模型参数与模型提供商</p>
         </div>
         <div className="admin-page-actions">
           <Button variant="outline" onClick={handleReset} disabled={saving}>
@@ -192,8 +500,22 @@ export function SystemSettingsPage() {
         </div>
       </div>
 
-      {/* ── RAG 检索与生成参数 ── */}
-      <Card>
+      <Tabs defaultValue="settings" className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="settings" className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4" />
+            系统配置
+          </TabsTrigger>
+          <TabsTrigger value="providers" className="flex items-center gap-2">
+            <Wifi className="w-4 h-4" />
+            模型提供商
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="settings">
+
+          {/* ── RAG 检索与生成参数 ── */}
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <SlidersHorizontal className="w-5 h-5" />
@@ -575,6 +897,13 @@ export function SystemSettingsPage() {
           </Table>
         </CardContent>
       </Card>
+
+        </TabsContent>
+
+        <TabsContent value="providers">
+          <LLMProviderPanel />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
