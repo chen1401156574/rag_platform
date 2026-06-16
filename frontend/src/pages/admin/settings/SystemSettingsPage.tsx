@@ -56,17 +56,20 @@ function LLMProviderPanel() {
   const [saving, setSaving] = useState(false);
   const [modelsModalId, setModelsModalId] = useState<string | null>(null);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+  const [modelsError, setModelsError] = useState("");
   const [checkedModels, setCheckedModels] = useState<Set<string>>(new Set());
   const [fetchingModels, setFetchingModels] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
 
   const load = async () => {
     try {
       setLoading(true);
       const data = await listProviders();
       setProviders(data);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "加载模型提供商失败"));
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -91,21 +94,38 @@ function LLMProviderPanel() {
   };
 
   const handleSave = async () => {
-    if (!formName.trim() || !formUrl.trim()) return;
+    const name = formName.trim();
+    const baseUrl = formUrl.trim();
+    const apiKey = formKey.trim();
+
+    if (!name) {
+      toast.error("请输入提供商名称");
+      return;
+    }
+    if (!baseUrl) {
+      toast.error("请输入 API 地址");
+      return;
+    }
+    if (!editingId && !apiKey) {
+      toast.error("请输入 API Key");
+      return;
+    }
+
     setSaving(true);
     try {
       if (editingId) {
-        const data: Record<string, unknown> = { name: formName.trim(), base_url: formUrl.trim() };
-        if (formKey.trim()) data.api_key = formKey.trim();
+        const data: Record<string, unknown> = { name, base_url: baseUrl };
+        if (apiKey) data.api_key = apiKey;
         await updateProvider(editingId, data);
       } else {
-        if (!formKey.trim()) { toast.error("请输入 API Key"); setSaving(false); return; }
-        await createProvider({ name: formName.trim(), base_url: formUrl.trim(), api_key: formKey.trim() });
+        await createProvider({ name, base_url: baseUrl, api_key: apiKey });
       }
       setModalOpen(false);
       await load();
-    } catch (e) {
-      console.error(e);
+      toast.success(editingId ? "提供商已更新" : "提供商已创建");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "保存提供商失败"));
+      console.error(error);
     } finally {
       setSaving(false);
     }
@@ -116,21 +136,26 @@ function LLMProviderPanel() {
       await deleteProvider(id);
       await load();
       toast.success("已删除");
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "删除提供商失败"));
+      console.error(error);
     }
   };
 
   const openModelsModal = async (p: LLMProvider) => {
     setModelsModalId(p.id);
     setFetchedModels([]);
+    setModelsError("");
     setCheckedModels(new Set(p.enabled_models));
     setFetchingModels(true);
     try {
       const result = await fetchProviderModels(p.id);
       setFetchedModels(result.models);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      const message = getErrorMessage(error, "获取模型列表失败");
+      setModelsError(message);
+      toast.error(message);
+      console.error(error);
     } finally {
       setFetchingModels(false);
     }
@@ -143,8 +168,9 @@ function LLMProviderPanel() {
       setModelsModalId(null);
       await load();
       toast.success("模型列表已更新");
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "保存模型选择失败"));
+      console.error(error);
     }
   };
 
@@ -159,11 +185,25 @@ function LLMProviderPanel() {
 
   const handleTest = async (id: string) => {
     setTestingId(id);
+    setTestResults((prev) => ({
+      ...prev,
+      [id]: { ok: true, message: "测试中..." },
+    }));
     try {
       await testProviderConnection(id);
+      setTestResults((prev) => ({
+        ...prev,
+        [id]: { ok: true, message: "连接正常" },
+      }));
       toast.success("连接正常");
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      const message = getErrorMessage(error, "连接测试失败");
+      setTestResults((prev) => ({
+        ...prev,
+        [id]: { ok: false, message },
+      }));
+      toast.error(message);
+      console.error(error);
     } finally {
       setTestingId(null);
     }
@@ -245,6 +285,15 @@ function LLMProviderPanel() {
                           <Trash2 className="w-3 h-3 text-red-500" />
                         </Button>
                       </div>
+                      {testResults[p.id] ? (
+                        <div
+                          className={`mt-2 text-xs ${
+                            testResults[p.id].ok ? "text-green-700" : "text-red-700"
+                          }`}
+                        >
+                          {testResults[p.id].message}
+                        </div>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -311,6 +360,10 @@ function LLMProviderPanel() {
           <div className="py-4 max-h-[400px] overflow-y-auto">
             {fetchingModels ? (
               <div className="text-sm text-muted-foreground text-center py-8">正在获取模型列表...</div>
+            ) : modelsError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {modelsError}
+              </div>
             ) : fetchedModels.length === 0 ? (
               <div className="text-sm text-muted-foreground text-center py-8">未获取到模型</div>
             ) : (

@@ -2,6 +2,7 @@ import { Router } from '@/router'
 import { App as AntdApp, ConfigProvider, Spin } from 'antd'
 import zhCN from 'antd/es/locale/zh_CN'
 import { useCallback, useRef, useState } from 'react'
+import { Toast } from '@/components/common/Toast'
 import { BRAND_COLORS } from '@/styles/brandTokens'
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
     >
       <AntdApp>
         <Router />
+        <Toast />
         <MountApi />
       </AntdApp>
     </ConfigProvider>

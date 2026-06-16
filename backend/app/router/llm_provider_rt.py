@@ -144,7 +144,10 @@ async def fetch_models(
             )
         if resp.status_code != 200:
             detail = resp.text[:500]
-            return error_result(code="400", message=f"获取模型列表失败 ({resp.status_code}): {detail}")
+            return error_result(
+                code="400",
+                message=f"获取模型列表失败 ({resp.status_code})，请检查 API 地址和 API Key。请求地址：{url}。{detail}",
+            )
 
         data = resp.json()
         raw_models = data.get("data", []) if isinstance(data, dict) else []
@@ -179,6 +182,9 @@ async def test_connection(
             )
         if resp.status_code == 200:
             return success_result(message="连接正常")
-        return error_result(code="400", message=f"连接失败 ({resp.status_code})")
+        return error_result(
+            code="400",
+            message=f"连接失败 ({resp.status_code})，请检查 API 地址和 API Key。请求地址：{url}",
+        )
     except Exception as e:
         return error_result(code="500", message=str(e))
