@@ -9,8 +9,9 @@ from models.system_config import SystemConfig
 from models.knowledge_admin import KnowledgeBaseAdmin, KnowledgeDocumentAdmin
 from models.ingestion import IngestionPipeline, IngestionTask, IngestionTaskNode, IngestionChunkLog
 from models.trace import TraceRun, TraceNode
+from models.llm_provider import LLMProvider
 
 __all__ = ['Base', 'User', 'Message', 'KnowledgeBase', 'Session', 'DocumentUpload',
            'IntentNode', 'UserAdmin', 'SystemConfig', 'KnowledgeBaseAdmin', 'KnowledgeDocumentAdmin',
            'IngestionPipeline', 'IngestionTask', 'IngestionTaskNode', 'IngestionChunkLog',
-           'TraceRun', 'TraceNode']
+           'TraceRun', 'TraceNode', 'LLMProvider']
