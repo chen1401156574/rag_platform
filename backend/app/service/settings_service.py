@@ -161,7 +161,8 @@ def load_settings(db: Session) -> dict[str, Any]:
     except Exception:
         pass
     ensure_default_chat_candidates(settings)
-    # 从 t_llm_provider 动态注入模型候选
+    # 清理旧注入 + 从 t_llm_provider 动态注入模型候选
+    _strip_provider_candidates(settings, _get_provider_model_ids(db))
     try:
         from models.llm_provider import LLMProvider
         rows = db.scalars(
@@ -181,7 +182,37 @@ def load_settings(db: Session) -> dict[str, Any]:
     return settings
 
 
+def _get_provider_model_ids(db: Session) -> set[str]:
+    """获取所有注册提供商的已启用模型 ID 集合"""
+    try:
+        from models.llm_provider import LLMProvider
+        rows = db.scalars(
+            select(LLMProvider).where(LLMProvider.is_active == 1)
+        ).all()
+        ids: set[str] = set()
+        for p in rows:
+            ids.update(p.get_enabled_models())
+        return ids
+    except Exception:
+        return set()
+
+
+def _strip_provider_candidates(settings: dict[str, Any], provider_ids: set[str]) -> None:
+    """移除动态注入的提供商模型候选，防止持久化到 DB"""
+    if not provider_ids:
+        return
+    candidates = settings.get("ai", {}).get("chat", {}).get("candidates")
+    if not isinstance(candidates, list):
+        return
+    settings["ai"]["chat"]["candidates"] = [
+        c for c in candidates
+        if not (isinstance(c, dict) and c.get("id") in provider_ids)
+    ]
+
+
 def persist_settings(db: Session, settings: dict[str, Any]) -> None:
+    # 持久化前移除动态注入的提供商模型候选
+    _strip_provider_candidates(settings, _get_provider_model_ids(db))
     payload = json.dumps(settings, ensure_ascii=False)
     try:
         row = db.scalars(
