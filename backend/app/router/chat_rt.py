@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Body, UploadFile, File, HTTPException, Query, Security, status, Depends
+import asyncio
 import copy
+import json
 import uuid
 from schemas.chat import SessionResponse, ChatRequest
 from fastapi.responses import StreamingResponse
@@ -52,7 +54,67 @@ def _get_chat_user(credentials: JwtAuthorizationCredentials) -> tuple[str, str]:
     return str(user_id), subject.get("user_name", "user")
 
 
+def _sse_payload(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _sse_status(stage: str, message: str, **extra) -> str:
+    status_payload = {"stage": stage, "message": message}
+    status_payload.update({key: value for key, value in extra.items() if value is not None})
+    return _sse_payload("status", {"status": status_payload})
+
+
 def _stream_chat_response(
+    *,
+    session_id: str,
+    question: str,
+    user_id: str,
+    user_name: str,
+    db: Session,
+    trace_name: str,
+    entry_method: str,
+    deep_thinking: bool = False,
+    clarifications: Optional[str] = None,
+    original_question: Optional[str] = None,
+):
+    async def stream():
+        yield _sse_status("received", "已收到问题")
+        yield _sse_status(
+            "preparing_context",
+            "正在识别意图、检索知识库并组织上下文",
+        )
+        await asyncio.sleep(0)
+        try:
+            response = _stream_chat_response_prepared(
+                session_id=session_id,
+                question=question,
+                user_id=user_id,
+                user_name=user_name,
+                db=db,
+                trace_name=trace_name,
+                entry_method=entry_method,
+                deep_thinking=deep_thinking,
+                clarifications=clarifications,
+                original_question=original_question,
+            )
+            async for chunk in response.body_iterator:
+                yield chunk
+        except Exception as exc:
+            logger.exception(f"Stream chat error before answer stream: {str(exc)}")
+            yield _sse_payload("error", {"error": {"message": "回答生成失败，请稍后重试"}})
+            yield "event: end\ndata: [DONE]\n\n"
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _stream_chat_response_prepared(
     *,
     session_id: str,
     question: str,

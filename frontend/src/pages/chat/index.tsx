@@ -51,6 +51,62 @@ type ChatRouteState = {
   selectedAt?: number
 }
 
+const FIRST_RESPONSE_TIMEOUT_MS = 15_000
+const STREAM_IDLE_TIMEOUT_MS = 120_000
+const SLOW_WAIT_NOTICE_MS = 20_000
+
+class ChatStreamTimeoutError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ChatStreamTimeoutError'
+  }
+}
+
+type StreamStatus = NonNullable<API.ChatItem['streamStatus']>
+
+type ActiveChatStream = {
+  controller: AbortController
+  target: API.ChatItem
+  abortReason?: 'user' | 'timeout'
+}
+
+function withTimeout<T>(
+  task: Promise<T>,
+  timeoutMs: number,
+  onTimeout: () => Error,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  return new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(onTimeout())
+    }, timeoutMs)
+
+    task.then(resolve, reject).finally(() => {
+      if (timer) clearTimeout(timer)
+    })
+  })
+}
+
+function errorMessageOf(error: unknown) {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  return '回答生成失败，请稍后重试'
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function streamToneOf(value: unknown): StreamStatus['tone'] {
+  return value === 'info' ||
+    value === 'warning' ||
+    value === 'error' ||
+    value === 'success'
+    ? value
+    : undefined
+}
+
 type HistoryMessage = {
   user_question?: string
   model_answer?: string
@@ -107,6 +163,7 @@ export default function Index() {
   const initializedRef = useRef(false)
   const routeStateKeyRef = useRef<string | null>(null)
   const sessionIdRef = useRef<string | null>(null)
+  const activeStreamRef = useRef<ActiveChatStream | null>(null)
 
   const [chat] = useState(() => {
     return proxy({
@@ -309,16 +366,30 @@ export default function Index() {
   }, [loading])
   useUnmount(() => {
     deviceActions.setChatting(false)
+    activeStreamRef.current?.controller.abort()
+    activeStreamRef.current = null
   })
 
   const sendChat = useCallback(
     async (target: API.ChatItem, message: string, targetSessionId: string, clarify?: { clarifications: string; original_question: string }) => {
       setCurrentChatItem(target)
       target.loading = true
+      target.error = undefined
+      target.canRetry = false
+      target.retryMessage = message
+      target.retryClarifications = clarify?.clarifications
+      target.retryOriginalQuestion = clarify?.original_question
+      target.streamStatus = {
+        stage: 'submitting',
+        message: '正在提交问题',
+      }
       let pendingContent = ''
       let pendingThinking = ''
       let flushFrame: number | null = null
       let scrollFrame: number | null = null
+      let streamCompleted = false
+      const controller = new AbortController()
+      activeStreamRef.current = { controller, target }
 
       const requestFrame = (callback: FrameRequestCallback) => {
         if (typeof window === 'undefined') {
@@ -353,32 +424,102 @@ export default function Index() {
         flushFrame = requestFrame(flushPending)
       }
 
-      try {
-        //后端接口
-        const res = await api.session.chat({
-          id: targetSessionId,
-          message,
-          clarifications: clarify?.clarifications,
-          original_question: clarify?.original_question,
+      const markStatus = (status: StreamStatus) => {
+        target.streamStatus = status
+        scheduleScroll()
+      }
+
+      const slowWaitTimer = setTimeout(() => {
+        if (!target.loading || target.content || target.clarifying_questions?.length || streamCompleted) {
+          return
+        }
+        markStatus({
+          stage: 'slow_wait',
+          message: '处理时间较长，仍在等待响应',
+          detail: '可以继续等待，或点击停止后重试。',
+          tone: 'warning',
         })
+      }, SLOW_WAIT_NOTICE_MS)
+
+      try {
+        const res = await withTimeout(
+          api.session.chat(
+            {
+              id: targetSessionId,
+              message,
+              clarifications: clarify?.clarifications,
+              original_question: clarify?.original_question,
+            },
+            { signal: controller.signal },
+          ),
+          FIRST_RESPONSE_TIMEOUT_MS,
+          () => {
+            activeStreamRef.current = {
+              controller,
+              target,
+              abortReason: 'timeout',
+            }
+            controller.abort()
+            return new ChatStreamTimeoutError('服务响应较慢，请稍后重试')
+          },
+        )
         sessionActions.updateKey()
 
+        markStatus({
+          stage: 'connected',
+          message: '已连接服务，正在等待检索结果',
+        })
+
         const reader = res.data.getReader()
-        if (!reader) return
+        if (!reader) {
+          throw new Error('浏览器无法读取回答流，请刷新后重试')
+        }
 
         await read(reader)
       } catch (error: unknown) {
-        target.error = error instanceof Error ? error.message : 'Unknown error'
-        throw error
+        flushPending()
+        const active = activeStreamRef.current
+        if (active?.target === target && active.abortReason === 'user') {
+          target.error = '已停止生成，可重新发送或重试本轮问题'
+        } else if (error instanceof ChatStreamTimeoutError) {
+          target.error = error.message
+        } else if (controller.signal.aborted) {
+          target.error = '请求已中断，可稍后重试'
+        } else {
+          target.error = errorMessageOf(error)
+        }
+        target.canRetry = true
+        target.streamStatus = {
+          stage: 'failed',
+          message: target.error,
+          tone: 'error',
+        }
       } finally {
+        clearTimeout(slowWaitTimer)
+        flushPending()
         target.loading = false
+        if (activeStreamRef.current?.target === target) {
+          activeStreamRef.current = null
+        }
       }
 
       async function read(reader: ReadableStreamDefaultReader<Uint8Array>) {
         let temp = ''
         const decoder = new TextDecoder('utf-8')
         while (true) {
-          const { value, done } = await reader.read()
+          const { value, done } = await withTimeout(
+            reader.read(),
+            STREAM_IDLE_TIMEOUT_MS,
+            () => {
+              activeStreamRef.current = {
+                controller,
+                target,
+                abortReason: 'timeout',
+              }
+              controller.abort()
+              return new ChatStreamTimeoutError('回答流长时间没有更新，请稍后重试')
+            },
+          )
           if (value) {
             temp += decoder.decode(value, { stream: !done })
           } else if (done) {
@@ -392,8 +533,12 @@ export default function Index() {
             const slice = temp.slice(0, index)
             temp = temp.slice(index + 1)
             //我们只需要data开头的数据，流式数据
-            if (slice.startsWith('data: ')) {
-              parseData(slice)
+            if (slice.startsWith('data:')) {
+              const result = parseData(slice)
+              if (result === 'done') {
+                flushPending()
+                return
+              }
             }
           }
 
@@ -402,12 +547,12 @@ export default function Index() {
               .split('\n')
               .filter(Boolean)
               .forEach((slice) => {
-                if (slice.startsWith('data: ')) {
+                if (slice.startsWith('data:')) {
                   parseData(slice)
                 }
               })
             flushPending()
-            console.debug('数据接受完毕', temp)
+            console.debug('数据接收完毕', temp)
             target.loading = false
             break
           }
@@ -415,52 +560,114 @@ export default function Index() {
       }
 
       function parseData(slice: string) {
+        const str = slice
+          .trim()
+          .replace(/^data:\s?/, '')
+          .trim()
+        if (str === '[DONE]') {
+          streamCompleted = true
+          target.streamStatus = {
+            stage: 'done',
+            message: '回答完成',
+            tone: 'success',
+          }
+          return 'done'
+        }
+
+        let json: unknown
         try {
-          const str = slice
-            .trim()
-            .replace(/^data: /, '')
-            .trim()
-          if (str === '[DONE]') {
-            return
-          }
-
-          const json = JSON.parse(str)
-          if (json?.content) {
-            if (json.thinking) {
-              pendingThinking += json.content || ''
-            } else {
-              pendingContent += json.content || ''
-            }
-            scheduleFlush()
-          }
-
-          if (json?.documents?.length) {
-            flushPending()
-            const reference = normalizeReferences(json.documents)
-            target.reference = reference
-
-            const documents = documentsFromReferences(reference)
-            target.documents = documents
-            setDocuments(documents)
-            scheduleScroll()
-          }
-
-          if (json?.clarifying_questions?.length) {
-            flushPending()
-            target.clarifying_questions = json.clarifying_questions
-            target.original_question = json.original_question
-            scheduleScroll()
-          }
-
-          if (json?.recommended_questions?.length) {
-            flushPending()
-            target.recommended_questions = json.recommended_questions
-            scheduleScroll()
-          }
+          json = JSON.parse(str)
         } catch {
           console.debug('解析失败')
           console.debug(slice)
+          return 'continue'
         }
+
+        if (!isRecord(json)) {
+          return 'continue'
+        }
+
+        const status = isRecord(json.status) ? json.status : undefined
+        if (typeof status?.message === 'string') {
+          markStatus({
+            stage: typeof status.stage === 'string' ? status.stage : 'running',
+            message: status.message,
+            detail: typeof status.detail === 'string' ? status.detail : undefined,
+            tone: streamToneOf(status.tone),
+          })
+        }
+
+        if (json.error) {
+          const streamError = isRecord(json.error) ? json.error : undefined
+          const errorMessage =
+            typeof json.error === 'string'
+              ? json.error
+              : typeof streamError?.message === 'string'
+                ? streamError.message
+                : '回答生成失败，请稍后重试'
+          target.error = errorMessage
+          target.canRetry = true
+          return 'done'
+        }
+
+        if (typeof json.content === 'string' && json.content) {
+          const isThinking = Boolean(json.thinking)
+          if (!target.content && !pendingContent && !target.think && !pendingThinking) {
+            markStatus({
+              stage: isThinking ? 'thinking' : 'answering',
+              message: isThinking ? '正在推理答案' : '正在生成答案',
+            })
+          }
+          if (isThinking) {
+            pendingThinking += json.content
+          } else {
+            pendingContent += json.content
+          }
+          scheduleFlush()
+        }
+
+        if (Array.isArray(json.documents) && json.documents.length) {
+          flushPending()
+          const reference = normalizeReferences(json.documents as API.Reference[])
+          target.reference = reference
+
+          const documents = documentsFromReferences(reference)
+          target.documents = documents
+          setDocuments(documents)
+          markStatus({
+            stage: 'answering',
+            message: '已完成检索，正在生成答案',
+            detail: documents.length ? `找到 ${documents.length} 个相关来源` : undefined,
+          })
+          scheduleScroll()
+        }
+
+        if (Array.isArray(json.clarifying_questions) && json.clarifying_questions.length) {
+          flushPending()
+          target.clarifying_questions = json.clarifying_questions.filter(
+            (item): item is string => typeof item === 'string',
+          )
+          target.original_question =
+            typeof json.original_question === 'string'
+              ? json.original_question
+              : undefined
+          target.streamStatus = {
+            stage: 'clarify_needed',
+            message: '需要补充信息',
+            tone: 'warning',
+          }
+          scheduleScroll()
+        }
+
+        if (Array.isArray(json.recommended_questions) && json.recommended_questions.length) {
+          flushPending()
+          target.recommended_questions = json.recommended_questions.filter(
+            (item): item is string => typeof item === 'string',
+          )
+          scheduleScroll()
+        }
+
+        return 'continue'
       }
     },
     [],
@@ -521,6 +728,54 @@ export default function Index() {
     },
     [chat, ensureSession, sendChat],
   )
+
+  const cancelCurrentResponse = useCallback(() => {
+    const active = activeStreamRef.current
+    if (!active) return
+    active.abortReason = 'user'
+    active.target.streamStatus = {
+      stage: 'cancelling',
+      message: '正在停止生成',
+      tone: 'warning',
+    }
+    active.controller.abort()
+  }, [])
+
+  const retryChatItem = useCallback(
+    async (item: API.ChatItem) => {
+      if (loadingRef.current) return
+      if (!item.retryMessage) return
+
+      const targetSessionId = sessionIdRef.current || (await ensureSession())
+      const clarify =
+        item.retryClarifications && item.retryOriginalQuestion
+          ? {
+              clarifications: item.retryClarifications,
+              original_question: item.retryOriginalQuestion,
+            }
+          : undefined
+
+      chat.list.push({
+        id: createChatId(),
+        role: ChatRole.User,
+        type: ChatType.Text,
+        content: item.retryMessage,
+      })
+
+      chat.list.push({
+        id: createChatId(),
+        role: ChatRole.Assistant,
+        type: ChatType.Document,
+        content: '',
+      })
+      scrollToBottom(contentRef.current)
+
+      const target = chat.list[chat.list.length - 1]
+      await sendChat(target, item.retryMessage, targetSessionId, clarify)
+    },
+    [chat, ensureSession, sendChat],
+  )
+
   useMount(async () => {
     const routeState = (location.state || null) as ChatRouteState | null
     routeStateKeyRef.current = routeState
@@ -637,6 +892,8 @@ export default function Index() {
         <ChatMessage
           list={list}
           onSend={send}
+          onCancel={cancelCurrentResponse}
+          onRetry={retryChatItem}
           onOpenCiations={setCurrentChatItem}
           onRefrence={setRead}
         />

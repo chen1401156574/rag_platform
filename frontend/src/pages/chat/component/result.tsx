@@ -16,9 +16,11 @@ export function Result(props: {
   item: API.ChatItem
   isEnd?: boolean
   onSend?: (text: string) => void
+  onCancel?: () => void
+  onRetry?: () => void
   onRefrence?: (index: number) => void
 }) {
-  const { item, isEnd, onSend, onRefrence } = props
+  const { item, isEnd, onSend, onCancel, onRetry, onRefrence } = props
 
   const shareMenu = useMemo(() => {
     return [
@@ -113,8 +115,37 @@ export function Result(props: {
         />
       ) : null}
 
+      {item.loading && item.streamStatus && item.documents?.length ? (
+        <div
+          className={classNames(
+            styles['chat-message-result__status'],
+            styles[`chat-message-result__status--${item.streamStatus.tone || 'info'}`],
+          )}
+        >
+          <span className={styles['status-dot']} />
+          <span className={styles['status-text']}>
+            {item.streamStatus.message}
+            {item.streamStatus.detail ? (
+              <span className={styles['status-detail']}>{item.streamStatus.detail}</span>
+            ) : null}
+          </span>
+          {onCancel ? (
+            <Button type="link" size="small" onClick={onCancel}>
+              停止
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {item.error ? (
-        <div className={styles['chat-message-result__error']}>{item.error}</div>
+        <div className={styles['chat-message-result__error']}>
+          <span>{item.error}</span>
+          {item.canRetry ? (
+            <Button size="small" type="primary" onClick={onRetry}>
+              重试
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {item.clarifying_questions && !item.loading ? (

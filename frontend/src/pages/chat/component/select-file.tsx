@@ -1,7 +1,7 @@
 import IconCompleted from '@/assets/chat/completed.svg'
 import IconFile from '@/assets/chat/file.svg'
 import IconSelectFile from '@/assets/chat/select-file.svg'
-import { RightOutlined } from '@ant-design/icons'
+import { CloseCircleOutlined, RightOutlined } from '@ant-design/icons'
 import { Button, Checkbox } from 'antd'
 import { useState } from 'react'
 import styles from './select-file.module.scss'
@@ -61,11 +61,34 @@ export default function ChooseFile(props: {
   )
 }
 
-function SelectFileSearching() {
+function SelectFileSearching(props: {
+  message?: string
+  detail?: string
+  tone?: 'info' | 'warning' | 'error' | 'success'
+  onCancel?: () => void
+}) {
+  const { message = '正在搜索知识库', detail, tone = 'info', onCancel } = props
+
   return (
-    <div className={styles['select-file-searching']}>
-      <div className={styles['icon']}></div>
-      <div className={styles['title']}>正在搜索知识库</div>
+    <div className={styles['select-file-searching']} data-tone={tone}>
+      <div className={styles['select-file-searching__main']}>
+        <div className={styles['icon']}></div>
+        <div>
+          <div className={styles['title']}>{message}</div>
+          {detail ? <div className={styles['detail']}>{detail}</div> : null}
+        </div>
+      </div>
+      {onCancel ? (
+        <Button
+          className={styles['cancel']}
+          type="text"
+          size="small"
+          icon={<CloseCircleOutlined />}
+          onClick={onCancel}
+        >
+          停止
+        </Button>
+      ) : null}
     </div>
   )
 }

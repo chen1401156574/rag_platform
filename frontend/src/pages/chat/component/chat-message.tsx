@@ -27,10 +27,12 @@ function AssistantMessage(props: {
   item: API.ChatItem
   isEnd?: boolean
   onSend?: (text: string) => void
+  onCancel?: () => void
+  onRetry?: (item: API.ChatItem) => void
   onOpenCiations?: () => void
   onRefrence?: (index: number) => void
 }) {
-  const { item, isEnd, onSend, onOpenCiations, onRefrence } = props
+  const { item, isEnd, onSend, onCancel, onRetry, onOpenCiations, onRefrence } = props
 
   const id = useMemo(() => {
     if (item.type === ChatType.Document) {
@@ -60,7 +62,14 @@ function AssistantMessage(props: {
                 return null
               }
               if (item.loading && !item.documents?.length) {
-                return <ChooseFile.Searching />
+                return (
+                  <ChooseFile.Searching
+                    message={item.streamStatus?.message}
+                    detail={item.streamStatus?.detail}
+                    tone={item.streamStatus?.tone}
+                    onCancel={onCancel}
+                  />
+                )
               } else if (!item.error) {
                 return (
                   <ChooseFile.Complete
@@ -77,6 +86,8 @@ function AssistantMessage(props: {
           item={item}
           isEnd={isEnd}
           onSend={onSend}
+          onCancel={onCancel}
+          onRetry={() => onRetry?.(item)}
           onRefrence={onRefrence}
         />
       </div>
@@ -87,10 +98,12 @@ function AssistantMessage(props: {
 export default function ChatMessage(props: {
   list: API.ChatItem[]
   onSend?: (text: string) => void
+  onCancel?: () => void
+  onRetry?: (item: API.ChatItem) => void
   onOpenCiations?: (item: API.ChatItem) => void
   onRefrence?: (target: API.Reference) => void
 }) {
-  const { list, onSend, onOpenCiations, onRefrence } = props
+  const { list, onSend, onCancel, onRetry, onOpenCiations, onRefrence } = props
 
   return (
     <div className={styles['chat-message']}>
@@ -105,6 +118,8 @@ export default function ChatMessage(props: {
             item={item}
             isEnd={list.length - 1 === index}
             onSend={onSend}
+            onCancel={item.loading ? onCancel : undefined}
+            onRetry={onRetry}
             onOpenCiations={() => onOpenCiations?.(item)}
             onRefrence={(index) => {
               const target = item.reference?.[index]

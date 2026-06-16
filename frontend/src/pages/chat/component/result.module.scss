@@ -29,6 +29,79 @@
     }
   }
 
+  .chat-message-result__status {
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 8px;
+    padding: 7px 8px 7px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--brand-cyan-100);
+    border-radius: 8px;
+    background: rgba(240, 253, 250, 0.78);
+    color: var(--brand-cyan-700);
+    font-size: 12px;
+    line-height: 18px;
+
+    :global(.ant-btn) {
+      height: 24px;
+      padding: 0 2px;
+      font-size: 12px;
+      color: var(--neutral-700);
+    }
+
+    .status-dot {
+      flex-shrink: 0;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 4px rgba(15, 122, 130, 0.1);
+    }
+
+    .status-text {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .status-detail {
+      display: block;
+      margin-top: 2px;
+      color: var(--neutral-600);
+    }
+  }
+
+  .chat-message-result__status--warning {
+    border-color: var(--brand-orange-100);
+    background: rgba(255, 247, 237, 0.9);
+    color: var(--brand-orange-700);
+
+    .status-dot {
+      box-shadow: 0 0 0 4px rgba(234, 85, 25, 0.1);
+    }
+  }
+
+  .chat-message-result__status--error {
+    border-color: var(--ant-color-error-border);
+    background: var(--ant-color-error-bg);
+    color: var(--ant-color-error);
+
+    .status-dot {
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1);
+    }
+  }
+
+  .chat-message-result__status--success {
+    border-color: var(--brand-green-100);
+    background: var(--brand-green-050);
+    color: var(--brand-green-700);
+
+    .status-dot {
+      box-shadow: 0 0 0 4px rgba(0, 122, 54, 0.1);
+    }
+  }
+
   .chat-message-result__quick-reply {
     margin-top: 17px;
     display: flex;
@@ -77,7 +150,26 @@
   }
 
   .chat-message-result__error {
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 8px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    border: 1px solid var(--ant-color-error-border);
+    border-radius: 8px;
+    background: var(--ant-color-error-bg);
     color: var(--ant-color-error);
+    font-size: 13px;
+    line-height: 20px;
+
+    :global(.ant-btn) {
+      min-width: 58px;
+      height: 28px;
+      font-size: 12px;
+    }
   }
 
   .chat-message-result__clarify {

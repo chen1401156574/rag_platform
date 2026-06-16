@@ -13,6 +13,16 @@ declare namespace API {
     type: import('@/configs').ChatType
     loading?: boolean
     error?: string
+    canRetry?: boolean
+    retryMessage?: string
+    retryClarifications?: string
+    retryOriginalQuestion?: string
+    streamStatus?: {
+      stage: string
+      message: string
+      detail?: string
+      tone?: 'info' | 'warning' | 'error' | 'success'
+    }
     content?: string
     think?: string
 
