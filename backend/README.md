@@ -20,6 +20,11 @@ cd swxy-p1
 2. **.env 配置文件**
 ```bash
 DASHSCOPE_API_KEY="your-api-key"
+
+# 可选：将前台用户问答模型切换到 DeepSeek OpenAI 兼容接口
+DEEPSEEK_BASE_URL="https://api.deepseek.com"
+DEEPSEEK_API_KEY="your-deepseek-api-key"
+DEEPSEEK_MODEL="deepseek-chat"
 ```
 
 3. **修改docker-compose.yml中的nltk本地路径**

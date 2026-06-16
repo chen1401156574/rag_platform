@@ -9,7 +9,7 @@
 整体链路：
 
 ```text
-React/Vite 前端 -> FastAPI 后端 -> PostgreSQL / Elasticsearch / Redis -> DashScope OpenAI 兼容接口
+React/Vite 前端 -> FastAPI 后端 -> PostgreSQL / Elasticsearch / Redis -> OpenAI 兼容模型接口
 ```
 
 ## 技术栈
@@ -17,7 +17,7 @@ React/Vite 前端 -> FastAPI 后端 -> PostgreSQL / Elasticsearch / Redis -> Das
 - 前端：React 18、TypeScript、Vite 6、Ant Design 5、Tailwind CSS 4、shadcn/ui、Radix UI、Zustand、Valtio、Axios。
 - 后端：FastAPI、SQLAlchemy、PostgreSQL 15、Elasticsearch 8.11.3、Redis 7、Alembic。
 - 文档解析：PDF、DOCX、TXT、Excel、PPT、HTML、Markdown、JSON；复杂 PDF 使用 DeepDOC 流程。
-- 大模型：通过 DashScope 的 OpenAI 兼容协议调用聊天、意图分类、推荐问题、Embedding 与重排序模型。
+- 大模型：默认通过 DashScope 的 OpenAI 兼容协议调用聊天、意图分类、推荐问题、Embedding 与重排序模型；用户问答主链路也支持通过 `DEEPSEEK_BASE_URL`、`DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL` 切换到 DeepSeek OpenAI 兼容接口。
 
 ## 目录结构
 
@@ -146,7 +146,7 @@ React/Vite 前端 -> FastAPI 后端 -> PostgreSQL / Elasticsearch / Redis -> Das
 -> 歧义审计与追问
 -> 合并临时文档
 -> Prompt 渲染
--> LLM SSE 流式生成
+-> LLM SSE 流式生成（默认 DashScope，可通过 DeepSeek 环境变量覆盖用户问答模型）
 -> 推荐问题
 -> 会话与消息入库
 -> Trace 记录

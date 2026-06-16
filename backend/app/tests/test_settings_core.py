@@ -1,9 +1,11 @@
 import logging
 import json
+import os
 import sys
 import types
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 
 if "colorlog" not in sys.modules:
@@ -48,6 +50,7 @@ if "fastapi_jwt" not in sys.modules:
 
 from router import settings_rt
 from models.system_config import SystemConfig
+from service.settings_service import get_chat_openai_config
 
 
 class _ScalarResult:
@@ -180,6 +183,58 @@ class RuntimeSettingsTests(unittest.IsolatedAsyncioTestCase):
         retrieval = result["data"]["rag"]["retrieval"]
 
         self.assertTrue(retrieval["rerankEnabled"])
+
+
+class ChatOpenAIConfigTests(unittest.TestCase):
+    def test_deepseek_env_overrides_user_chat_openai_config(self):
+        with patch.dict(
+            os.environ,
+            {
+                "DEEPSEEK_BASE_URL": "https://api.deepseek.example/v1",
+                "DEEPSEEK_API_KEY": "deepseek-secret",
+                "DEEPSEEK_MODEL": "deepseek-chat",
+                "DASHSCOPE_BASE_URL": "https://dashscope.example/v1",
+                "DASHSCOPE_API_KEY": "dashscope-secret",
+            },
+            clear=True,
+        ):
+            config = get_chat_openai_config({"ai": {"chat": {"defaultModel": "qwen2.5-72b-instruct"}}})
+
+        self.assertEqual(config["provider"], "deepseek-openai-compatible")
+        self.assertEqual(config["base_url"], "https://api.deepseek.example/v1")
+        self.assertEqual(config["api_key"], "deepseek-secret")
+        self.assertEqual(config["model"], "deepseek-chat")
+
+    def test_chat_openai_config_falls_back_to_dashscope_when_deepseek_env_absent(self):
+        with patch.dict(
+            os.environ,
+            {
+                "DASHSCOPE_BASE_URL": "https://dashscope.example/v1",
+                "DASHSCOPE_API_KEY": "dashscope-secret",
+            },
+            clear=True,
+        ):
+            config = get_chat_openai_config(
+                {"ai": {"chat": {"defaultModel": "deepseek-v4-pro"}}},
+                fallback_model="qwen2.5-7b-instruct",
+            )
+
+        self.assertEqual(config["provider"], "dashscope-openai-compatible")
+        self.assertEqual(config["base_url"], "https://dashscope.example/v1")
+        self.assertEqual(config["api_key"], "dashscope-secret")
+        self.assertEqual(config["model"], "qwen2.5-7b-instruct")
+
+    def test_partial_deepseek_env_is_rejected(self):
+        with patch.dict(
+            os.environ,
+            {
+                "DEEPSEEK_BASE_URL": "https://api.deepseek.example/v1",
+                "DEEPSEEK_API_KEY": "deepseek-secret",
+            },
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ValueError, "同时设置"):
+                get_chat_openai_config({"ai": {"chat": {"defaultModel": "deepseek-v4-pro"}}})
 
 
 if __name__ == "__main__":

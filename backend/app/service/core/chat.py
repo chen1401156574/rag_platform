@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from utils.database import get_db
 from fastapi import HTTPException
-from service.settings_service import get_chat_model, get_generation_temperature, get_prompt_template
+from service.settings_service import get_chat_openai_config, get_generation_temperature, get_prompt_template
 from utils import logger
 from dotenv import load_dotenv
 
@@ -63,7 +63,7 @@ def get_quick_parse_content(session_id: str) -> str:
         logger.error(f"从 Redis 获取快速解析内容失败: {str(e)}")
         return None
 
-def generate_recommended_questions(user_question, retrieved_content=None, session_id=None):
+def generate_recommended_questions(user_question, retrieved_content=None, session_id=None, settings=None):
     """
     根据用户提问生成相关推荐问题。
 
@@ -113,12 +113,13 @@ def generate_recommended_questions(user_question, retrieved_content=None, sessio
     
     try:
         # 调用大模型生成推荐问题
+        chat_config = get_chat_openai_config(settings or {}, fallback_model="qwen2.5-7b-instruct")
         client = OpenAI(
-                api_key=os.getenv("DASHSCOPE_API_KEY"),
-                base_url=os.getenv("DASHSCOPE_BASE_URL")
+                api_key=chat_config["api_key"],
+                base_url=chat_config["base_url"]
             )
         completion = client.chat.completions.create(
-            model="qwen2.5-7b-instruct",
+            model=chat_config["model"],
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             stream=False,
@@ -170,7 +171,7 @@ def generate_recommended_questions(user_question, retrieved_content=None, sessio
         logger.error(f"调用大模型生成推荐问题时发生错误: {str(e)}")
         return []
 
-def generate_session_name(user_question):
+def generate_session_name(user_question, settings=None):
     prompt = f"""
     请根据以下用户提问，生成一个简洁且具有代表性的会话名称：
     用户提问：{user_question}
@@ -189,12 +190,13 @@ def generate_session_name(user_question):
     
     # 调用大模型生成会话名称
     try:
+        chat_config = get_chat_openai_config(settings or {}, fallback_model="qwen2.5-72b-instruct")
         client = OpenAI(
-                api_key=os.getenv("DASHSCOPE_API_KEY"),
-                base_url=os.getenv("DASHSCOPE_BASE_URL")
+                api_key=chat_config["api_key"],
+                base_url=chat_config["base_url"]
             )
         completion = client.chat.completions.create(
-            model="qwen2.5-72b-instruct",
+            model=chat_config["model"],
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             stream=False,
@@ -294,7 +296,7 @@ def write_chat_to_db(
     finally:
         db.close()
 
-def update_session_name(session_id: str, question: str, user_id: str):
+def update_session_name(session_id: str, question: str, user_id: str, settings=None):
     """
     根据 session_id 查数据库的表 sessions，有的话直接跳过，没有的话先生成 session_name，再插入。
 
@@ -314,7 +316,7 @@ def update_session_name(session_id: str, question: str, user_id: str):
             logger.info(f"Session {session_id} already exists, skipping.")
         else:
             if question:
-                session_name = generate_session_name(question)
+                session_name = generate_session_name(question, settings=settings)
                 db.execute(
                     text(
                         """
@@ -452,13 +454,17 @@ def get_chat_completion(
     stream_chunk_count = 0
     answer_chunk_count = 0
     thinking_chunk_count = 0
-    model_name = get_chat_model(settings or {})
+    model_name = None
+    provider_name = None
     temperature = get_generation_temperature(settings or {})
 
     try:
+        chat_config = get_chat_openai_config(settings or {})
+        model_name = chat_config["model"]
+        provider_name = chat_config["provider"]
         client = OpenAI(
-            api_key=os.getenv("DASHSCOPE_API_KEY"),
-            base_url=os.getenv("DASHSCOPE_BASE_URL")
+            api_key=chat_config["api_key"],
+            base_url=chat_config["base_url"]
         )
 
         completion = client.chat.completions.create(
@@ -476,7 +482,7 @@ def get_chat_completion(
                 end_time=llm_request_end,
                 status="success",
                 input_data={"model": model_name, "temperature": temperature, "stream": True},
-                output_data={"provider": "dashscope-openai-compatible"},
+                output_data={"provider": provider_name},
             )
 
         all_documents = retrieved_content.copy() if retrieved_content else []
@@ -572,7 +578,12 @@ def get_chat_completion(
                 recommend_start = datetime.now()
                 try:
                     logger.info("开始生成推荐问题...")
-                    recommended_questions = generate_recommended_questions(question, retrieved_content, session_id)
+                    recommended_questions = generate_recommended_questions(
+                        question,
+                        retrieved_content,
+                        session_id,
+                        settings=settings,
+                    )
                     logger.info(f"推荐问题生成结果: {recommended_questions}")
                     recommend_end = datetime.now()
                     if tracker:
@@ -693,7 +704,7 @@ def get_chat_completion(
 
                 title_start = datetime.now()
                 try:
-                    update_session_name(session_id, question, user_id)
+                    update_session_name(session_id, question, user_id, settings=settings)
                     title_end = datetime.now()
                     if tracker:
                         tracker.record_node(

@@ -18,6 +18,8 @@
 -> 记录 Trace
 ```
 
+用户问答的 LLM 调用默认沿用 DashScope OpenAI 兼容配置；当 `DEEPSEEK_BASE_URL`、`DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL` 同时配置时，主回答、推荐问题和会话标题生成会切换到 DeepSeek OpenAI 兼容接口。
+
 ## 意图分类
 
 意图分类由 `backend/app/service/intent_engine.py` 负责。当前会从启用的意图树节点中选择最匹配项，并保留关键词兜底逻辑。
@@ -76,4 +78,3 @@ Trace 目标是解释一次问答的关键决策。
 - 错误信息。
 - 意图命中与置信度。
 - 检索结果和引用关系。
-

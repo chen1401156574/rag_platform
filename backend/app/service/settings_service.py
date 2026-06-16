@@ -10,6 +10,7 @@ from models.system_config import SystemConfig
 
 
 SETTINGS_KEY = "rag_settings"
+DEEPSEEK_CHAT_ENV_NAMES = ("DEEPSEEK_BASE_URL", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL")
 
 DEFAULT_RAG_SETTINGS: dict[str, Any] = {
     "upload": {
@@ -335,3 +336,44 @@ def get_chat_model(settings: dict[str, Any]) -> str:
     if configured:
         return str(configured)
     return os.getenv("CHAT_MODEL", "deepseek-v4-pro")
+
+
+def _env_text(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _deepseek_chat_env_config() -> dict[str, str] | None:
+    values = {name: _env_text(name) for name in DEEPSEEK_CHAT_ENV_NAMES}
+    if not any(values.values()):
+        return None
+
+    missing = [name for name in DEEPSEEK_CHAT_ENV_NAMES if not values[name]]
+    if missing:
+        raise ValueError(
+            "DeepSeek OpenAI 兼容配置不完整，请同时设置: "
+            + ", ".join(DEEPSEEK_CHAT_ENV_NAMES)
+        )
+
+    return {
+        "provider": "deepseek-openai-compatible",
+        "base_url": values["DEEPSEEK_BASE_URL"],
+        "api_key": values["DEEPSEEK_API_KEY"],
+        "model": values["DEEPSEEK_MODEL"],
+    }
+
+
+def get_chat_openai_config(settings: dict[str, Any], fallback_model: str | None = None) -> dict[str, str | None]:
+    deepseek_config = _deepseek_chat_env_config()
+    if deepseek_config:
+        return deepseek_config
+
+    return {
+        "provider": "dashscope-openai-compatible",
+        "base_url": _env_text("DASHSCOPE_BASE_URL"),
+        "api_key": _env_text("DASHSCOPE_API_KEY"),
+        "model": fallback_model or get_chat_model(settings),
+    }
